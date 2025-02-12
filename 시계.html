@@ -11,8 +11,8 @@
             background-color: #f4f4f4;
             margin: 20px;
         }
-
-        /* 대한민국 & 세계 시간 UI */
+        
+        /* 시계 컨테이너 (대한민국 시간 & 세계 시간) */
         .clock-container {
             display: flex;
             justify-content: center;
@@ -33,53 +33,81 @@
             max-width: 100%;
             white-space: nowrap;
         }
+        
+        .clock-box:hover {
+            transform: scale(1.05);
+        }
 
         .clock-title {
-            font-size: clamp(12px, 2vw, 16px);
+            font-size: 20px;
             font-weight: bold;
+            margin-bottom: 10px;
         }
 
         .clock-time {
-            font-size: clamp(14px, 2.5vw, 20px);
+            font-size: 28px;
             font-weight: bold;
             color: #007bff;
+            margin-top: 10px;
         }
 
         /* 지도 스타일 */
         .map-container {
-            margin-top: 15px;
-            text-align: center;
+            margin-top: 30px;
         }
 
         img {
-            max-width: 80%;
+            max-width: 90%;
             height: auto;
             border-radius: 10px;
             box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.2);
-            cursor: pointer;
-            display: block;
-            margin: auto;
         }
     </style>
 </head>
 <body>
 
-    <!-- 대한민국 시간 표시 -->
+    <!-- 대한민국 시간 & 세계 시간 나란히 배치 -->
     <div class="clock-container">
         <div class="clock-box">
             <p class="clock-title">🇰🇷 대한민국 현재 시간</p>
             <p id="korea-time" class="clock-time">로딩 중...</p>
         </div>
         <div class="clock-box">
-            <p class="clock-title" id="selected-country">🌎 세계 도시를 선택하세요</p>
+            <p class="clock-title" id="selected-country">🌎 세계 시간을 선택하세요</p>
             <p id="selected-time" class="clock-time">--:--:--</p>
         </div>
     </div>
 
-    <!-- 세계 지도 -->
+    <!-- 세계 지도 이미지 -->
     <div class="map-container">
-        <img id="world-map" src="https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/%ED%91%9C%EC%A4%80%EC%8B%9C%EA%B0%84%EB%8C%80.jpg" alt="세계 시간대 지도">
+        <img src="https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/%ED%91%9C%EC%A4%80%EC%8B%9C%EA%B0%84%EB%8C%80.jpg" usemap="#worldmap" alt="세계 시간대 지도">
     </div>
+
+    <!-- 이미지맵: 각 도시 클릭 가능 -->
+    <map name="worldmap">
+        <area shape="circle" coords="250,150,10" href="#" alt="오슬로" onclick="updateTimeByImage('Europe/Oslo', '오슬로')">
+        <area shape="circle" coords="220,160,10" href="#" alt="런던" onclick="updateTimeByImage('Europe/London', '런던')">
+        <area shape="circle" coords="240,180,10" href="#" alt="파리" onclick="updateTimeByImage('Europe/Paris', '파리')">
+        <area shape="circle" coords="290,190,10" href="#" alt="모스크바" onclick="updateTimeByImage('Europe/Moscow', '모스크바')">
+        <area shape="circle" coords="280,250,10" href="#" alt="카이로" onclick="updateTimeByImage('Africa/Cairo', '카이로')">
+        <area shape="circle" coords="300,350,10" href="#" alt="케이프타운" onclick="updateTimeByImage('Africa/Johannesburg', '케이프타운')">
+        
+        <!-- 아시아 -->
+        <area shape="circle" coords="400,260,10" href="#" alt="다카" onclick="updateTimeByImage('Asia/Dhaka', '다카')">
+        <area shape="circle" coords="480,200,10" href="#" alt="베이징" onclick="updateTimeByImage('Asia/Shanghai', '베이징')">
+        <area shape="circle" coords="520,220,10" href="#" alt="서울" onclick="updateTimeByImage('Asia/Seoul', '서울')">
+        <area shape="circle" coords="550,200,10" href="#" alt="도쿄" onclick="updateTimeByImage('Asia/Tokyo', '도쿄')">
+        <area shape="circle" coords="620,280,10" href="#" alt="시드니" onclick="updateTimeByImage('Australia/Sydney', '시드니')">
+        <area shape="circle" coords="680,300,10" href="#" alt="오클랜드" onclick="updateTimeByImage('Pacific/Auckland', '오클랜드')">
+
+        <!-- 북미 -->
+        <area shape="circle" coords="100,90,10" href="#" alt="앵커리지" onclick="updateTimeByImage('America/Anchorage', '앵커리지')">
+        <area shape="circle" coords="120,120,10" href="#" alt="밴쿠버" onclick="updateTimeByImage('America/Vancouver', '밴쿠버')">
+        <area shape="circle" coords="130,130,10" href="#" alt="시애틀" onclick="updateTimeByImage('America/Los_Angeles', '시애틀')">
+        <area shape="circle" coords="140,140,10" href="#" alt="로스앤젤레스" onclick="updateTimeByImage('America/Los_Angeles', '로스앤젤레스')">
+        <area shape="circle" coords="180,160,10" href="#" alt="워싱턴" onclick="updateTimeByImage('America/New_York', '워싱턴')">
+        <area shape="circle" coords="190,170,10" href="#" alt="뉴욕" onclick="updateTimeByImage('America/New_York', '뉴욕')">
+    </map>
 
     <script>
         function getTimeInTimeZone(timeZone) {
