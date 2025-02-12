@@ -80,33 +80,39 @@
     </div>
 
     <script>
-        function getTimeInTimeZone(timeZone) {
-            const now = new Date();
-            return now.toLocaleString("ko-KR", {
-                timeZone: timeZone,
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: true
-            });
-        }
+        // ✅ 원본 이미지 크기 (고정된 기준 크기)
+        const originalWidth = 800;  // 원본 너비
+        const originalHeight = 600; // 원본 높이
 
-        function updateTimes() {
-            document.getElementById("korea-time").textContent = getTimeInTimeZone("Asia/Seoul");
-        }
+        // ✅ 클릭 가능한 도시 및 좌표 (원본 크기 기준)
+        const cities = [
+            { name: "오슬로", timezone: "Europe/Oslo", x: 250, y: 150 },
+            { name: "런던", timezone: "Europe/London", x: 220, y: 160 },
+            { name: "파리", timezone: "Europe/Paris", x: 240, y: 180 },
+            { name: "모스크바", timezone: "Europe/Moscow", x: 290, y: 190 },
+            { name: "카이로", timezone: "Africa/Cairo", x: 280, y: 250 },
+            { name: "케이프타운", timezone: "Africa/Johannesburg", x: 300, y: 350 },
+            { name: "다카", timezone: "Asia/Dhaka", x: 400, y: 260 },
+            { name: "베이징", timezone: "Asia/Shanghai", x: 480, y: 200 },
+            { name: "서울", timezone: "Asia/Seoul", x: 520, y: 220 },
+            { name: "도쿄", timezone: "Asia/Tokyo", x: 550, y: 200 },
+            { name: "시드니", timezone: "Australia/Sydney", x: 620, y: 280 },
+            { name: "오클랜드", timezone: "Pacific/Auckland", x: 680, y: 300 }
+        ];
 
-        function updateTimeByImage(timeZone, countryName) {
-            document.getElementById("selected-time").textContent = getTimeInTimeZone(timeZone);
-            document.getElementById("selected-country").textContent = `🌍 ${countryName} 현재 시간`;
-        }
+        // ✅ 이미지 클릭 시 좌표 계산 및 가장 가까운 도시 찾기
+        document.getElementById("world-map").addEventListener("click", function(event) {
+            const img = event.target;
+            const rect = img.getBoundingClientRect();
 
-        // 1초마다 대한민국 시간 업데이트
-        setInterval(updateTimes, 1000);
-        updateTimes();
-    </script>
+            const imgWidth = rect.width;  // 현재 이미지 너비
+            const imgHeight = rect.height; // 현재 이미지 높이
 
-</body>
-</html>
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
+
+            // ✅ 원본 크기 기준으로 좌표 변환
+            const originalX = Math.round((clickX / imgWidth) * originalWidth);
+            const originalY = Math.round((clickY / imgHeight) * originalHeight);
+
+     
