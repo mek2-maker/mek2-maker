@@ -102,16 +102,22 @@
 
     function updateTimes() {
       document.getElementById("korea-time").textContent = getTimeInTimeZone("Asia/Seoul");
+
+      // 선택된 도시가 있을 경우 세계 시간도 업데이트
+      if (selectedTimeZone) {
+        document.getElementById("selected-time").textContent = getTimeInTimeZone(selectedTimeZone);
+      }
     }
 
     function updateTimeByImage(timeZone, countryName) {
+      selectedTimeZone = timeZone; // 선택된 시간대 저장
       document.getElementById("selected-time").textContent = getTimeInTimeZone(timeZone);
       document.getElementById("selected-country").textContent = countryName;
     }
 
-    // 1초마다 대한민국 시간 업데이트
+    // 1초마다 대한민국 및 세계 시간 업데이트
     setInterval(updateTimes, 1000);
-    updateTimes(); // 페이지 로드시 초기화
+    updateTimes();
   </script>
 
 </body>
