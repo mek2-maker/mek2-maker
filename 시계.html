@@ -5,18 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>세계 시계</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background-color: #f4f4f4;
+    /* html, body 기본 스타일 초기화 */
+    html, body {
       margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+    
+    /* 브라우저 중앙 정렬 */
+    body {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      background-color: #f4f4f4;
     }
-
-    /* 전체 HTML을 감싸는 박스 */
+    
+    /* 스케일링용 컨테이너: 내부 내용(320×320 디자인)을 비례 축소 */
+    #scaler {
+      transform-origin: top left;
+    }
+    
+    /* 디자인 기준 320×320px */
     .wrapper {
       width: 320px;
       height: 320px;
@@ -31,7 +42,7 @@
       overflow: hidden;
       text-align: center;
     }
-
+    
     /* 대한민국 & 세계 시간 UI */
     .clock-container {
       width: 100%;
@@ -42,21 +53,21 @@
       align-items: center;
       padding: 5px 0;
     }
-
+    
     .clock-title {
-      font-size: clamp(10px, 2vw, 12px);
+      font-size: 12px;
       font-weight: bold;
       margin-bottom: 2px;
     }
-
+    
     .clock-time {
-      font-size: clamp(10px, 2vw, 14px);
+      font-size: 14px;
       font-weight: bold;
       color: #007bff;
       margin-bottom: 2px;
       word-break: break-word;
     }
-
+    
     /* 지도 스타일 */
     .map-container {
       width: 100%;
@@ -65,37 +76,53 @@
       justify-content: center;
       align-items: center;
     }
-
-    img {
+    
+    .map-container img {
       max-width: 90%;
-      max-height: 50px;
+      max-height: 100%;
       border-radius: 5px;
       cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <div class="wrapper">
-    <!-- 대한민국 시간 표시 -->
-    <div class="clock-container">
-      <p class="clock-title">🇰🇷 대한민국 현재 시간</p>
-      <p id="korea-time" class="clock-time">로딩 중...</p>
-    </div>
-
-    <!-- 세계 시간 표시 (국가명을 추가하여 오류 해결) -->
-    <div class="clock-container">
-      <p id="selected-country" class="clock-title">🌍 세계 도시를 선택하세요</p>
-      <p id="selected-time" class="clock-time">--:--:--</p>
-    </div>
-
-    <!-- 세계 지도 이미지 -->
-    <div class="map-container">
-      <img id="world-map" src="https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/%ED%91%9C%EC%A4%80%EC%8B%9C%EA%B0%84%EB%8C%80.jpg" alt="세계 시간대 지도">
+  <!-- 스케일링 컨테이너 -->
+  <div id="scaler">
+    <div class="wrapper">
+      <!-- 대한민국 시간 표시 -->
+      <div class="clock-container">
+        <p class="clock-title">🇰🇷 대한민국 현재 시간</p>
+        <p id="korea-time" class="clock-time">로딩 중...</p>
+      </div>
+      
+      <!-- 세계 시간 표시 (국가명을 함께 표시) -->
+      <div class="clock-container">
+        <p id="selected-country" class="clock-title">🌍 세계 도시를 선택하세요</p>
+        <p id="selected-time" class="clock-time">--:--:--</p>
+      </div>
+      
+      <!-- 세계 지도 이미지 -->
+      <div class="map-container">
+        <img id="world-map" src="https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/%ED%91%9C%EC%A4%80%EC%8B%9C%EA%B0%84%EB%8C%80.jpg" alt="세계 시간대 지도">
+      </div>
     </div>
   </div>
-
+  
   <script>
-    // 지정한 시간대의 시간을 "ko-KR" 형식으로 반환하는 함수
+    // 디자인 기준 크기
+    const designWidth = 320;
+    const designHeight = 320;
+    const scaler = document.getElementById("scaler");
+    
+    // 창 크기에 맞춰 스케일링 비율 계산 및 적용
+    function scaleContent() {
+      const scale = Math.min(window.innerWidth / designWidth, window.innerHeight / designHeight);
+      scaler.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener("resize", scaleContent);
+    scaleContent();
+    
+    // 지정한 시간대의 현재 시간을 반환하는 함수
     function getTimeInTimeZone(timeZone) {
       const now = new Date();
       return now.toLocaleString("ko-KR", {
@@ -109,22 +136,22 @@
         hour12: true
       });
     }
-
-    // 대한민국 시간 갱신
+    
+    // 대한민국 시간 업데이트
     function updateTimes() {
       document.getElementById("korea-time").textContent = getTimeInTimeZone("Asia/Seoul");
     }
-
-    // 세계 시계 업데이트: 선택한 시간대와 국가명을 표시
+    
+    // 세계 시간 업데이트: 선택한 시간대와 국가명을 표시
     function updateTimeByImage(timeZone, countryName) {
       document.getElementById("selected-time").textContent = getTimeInTimeZone(timeZone);
       document.getElementById("selected-country").textContent = `🌍 ${countryName} 현재 시간`;
     }
-
+    
     // 1초마다 대한민국 시간 업데이트
     setInterval(updateTimes, 1000);
     updateTimes();
-
+    
     // 클릭할 때마다 순차적으로 표시할 세계 시간대 목록
     const worldTimeZones = [
       { timeZone: "America/New_York", country: "뉴욕, 미국" },
@@ -132,14 +159,12 @@
       { timeZone: "Asia/Tokyo", country: "도쿄, 일본" },
       { timeZone: "Australia/Sydney", country: "시드니, 호주" }
     ];
-
     let currentZoneIndex = 0;
-
-    // 지도 이미지를 클릭하면 다음 시간대를 표시하도록 이벤트 리스너 추가
+    
+    // 지도 이미지를 클릭하면 다음 시간대를 표시
     document.getElementById("world-map").addEventListener("click", function() {
       const { timeZone, country } = worldTimeZones[currentZoneIndex];
       updateTimeByImage(timeZone, country);
-      // 다음 인덱스로 순환 (목록 끝이면 처음으로)
       currentZoneIndex = (currentZoneIndex + 1) % worldTimeZones.length;
     });
   </script>
