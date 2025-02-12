@@ -16,6 +16,22 @@
             height: 100vh;
         }
 
+        /* 전체 HTML을 감싸는 박스 */
+        .wrapper {
+            width: 320px;
+            height: 320px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 3px 3px 15px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px;
+            overflow: hidden;
+            text-align: center;
+        }
+
         /* 대한민국 & 세계 시간 UI */
         .clock-container {
             width: 100%;
@@ -24,33 +40,35 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            padding: 5px 0;
         }
 
         .clock-title {
-            font-size: clamp(12px, 2vw, 14px); /* 자동 크기 조정 */
+            font-size: clamp(10px, 2vw, 12px); /* 작은 크기로 자동 조정 */
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
         }
 
         .clock-time {
-            font-size: clamp(12px, 2vw, 16px); /* 자동 크기 조정 */
+            font-size: clamp(10px, 2vw, 14px); /* 작은 크기로 자동 조정 */
             font-weight: bold;
             color: #007bff;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
+            word-break: break-word; /* 텍스트가 넘치지 않도록 줄바꿈 */
         }
 
         /* 지도 스타일 */
         .map-container {
             width: 100%;
-            height: 50px; /* 작은 크기로 조정 */
+            height: 50px; /* 지도 크기 줄이기 */
             display: flex;
             justify-content: center;
             align-items: center;
         }
 
         img {
-            max-width: 80%;
-            max-height: 100%;
+            max-width: 90%;
+            max-height: 50px; /* 지도 크기 제한 */
             border-radius: 5px;
             cursor: pointer;
         }
@@ -59,11 +77,13 @@
 <body>
 
     <div class="wrapper">
-        <!-- 대한민국 시간 & 세계 시간 나란히 표시 -->
+        <!-- 대한민국 시간 표시 -->
         <div class="clock-container">
             <p class="clock-title">🇰🇷 대한민국 현재 시간</p>
             <p id="korea-time" class="clock-time">로딩 중...</p>
         </div>
+
+        <!-- 세계 시간 표시 -->
         <div class="clock-container">
             <p class="clock-title">🌍 세계 도시를 선택하세요</p>
             <p id="selected-time" class="clock-time">--:--:--</p>
