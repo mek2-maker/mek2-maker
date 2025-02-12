@@ -11,18 +11,19 @@
             background-color: #f4f4f4;
             margin: 20px;
         }
-        
+
         /* 대한민국 & 세계 시간 UI */
         .clock-container {
             display: flex;
             justify-content: center;
             gap: 20px;
             width: 100%;
-            flex-wrap: wrap; /* 화면이 좁아지면 자동 줄바꿈 */
+            flex-wrap: wrap; /* 자동 줄바꿈 */
         }
-        
+
+        /* 카드 스타일 (가변 크기) */
         .clock-box {
-            flex: 1; /* 네모 박스가 자동으로 크기 조절됨 */
+            flex: 1; /* 가변 크기 조정 */
             min-width: 250px; /* 최소 크기 */
             max-width: 400px; /* 최대 크기 */
             background: white;
@@ -32,10 +33,6 @@
             text-align: center;
         }
 
-        .clock-box:hover {
-            transform: scale(1.05);
-        }
-
         .clock-title {
             font-size: 20px;
             font-weight: bold;
@@ -43,7 +40,7 @@
         }
 
         .clock-time {
-            font-size: clamp(18px, 3vw, 36px);
+            font-size: clamp(18px, 3vw, 36px); /* 글자 크기 자동 조절 */
             font-weight: bold;
             color: #007bff;
             margin-top: 10px;
@@ -83,63 +80,6 @@
     </div>
 
     <script>
-        // ✅ 원본 이미지 크기 (고정된 기준 크기)
-        const originalWidth = 800;  // 원본 너비
-        const originalHeight = 600; // 원본 높이
-
-        // ✅ 클릭 가능한 도시 및 좌표 (원본 크기 기준)
-        const cities = [
-            { name: "오슬로", timezone: "Europe/Oslo", x: 250, y: 150 },
-            { name: "런던", timezone: "Europe/London", x: 220, y: 160 },
-            { name: "파리", timezone: "Europe/Paris", x: 240, y: 180 },
-            { name: "모스크바", timezone: "Europe/Moscow", x: 290, y: 190 },
-            { name: "카이로", timezone: "Africa/Cairo", x: 280, y: 250 },
-            { name: "케이프타운", timezone: "Africa/Johannesburg", x: 300, y: 350 },
-            { name: "다카", timezone: "Asia/Dhaka", x: 400, y: 260 },
-            { name: "베이징", timezone: "Asia/Shanghai", x: 480, y: 200 },
-            { name: "서울", timezone: "Asia/Seoul", x: 520, y: 220 },
-            { name: "도쿄", timezone: "Asia/Tokyo", x: 550, y: 200 },
-            { name: "시드니", timezone: "Australia/Sydney", x: 620, y: 280 },
-            { name: "오클랜드", timezone: "Pacific/Auckland", x: 680, y: 300 }
-        ];
-
-        // ✅ 이미지 클릭 시 좌표 계산 및 가장 가까운 도시 찾기
-        document.getElementById("world-map").addEventListener("click", function(event) {
-            const img = event.target;
-            const rect = img.getBoundingClientRect();
-
-            const imgWidth = rect.width;  // 현재 이미지 너비
-            const imgHeight = rect.height; // 현재 이미지 높이
-
-            const clickX = event.clientX - rect.left;
-            const clickY = event.clientY - rect.top;
-
-            // ✅ 원본 크기 기준으로 좌표 변환
-            const originalX = Math.round((clickX / imgWidth) * originalWidth);
-            const originalY = Math.round((clickY / imgHeight) * originalHeight);
-
-            // ✅ 가장 가까운 도시 찾기
-            let nearestCity = null;
-            let minDistance = Infinity;
-
-            cities.forEach(city => {
-                const distance = Math.sqrt(Math.pow(city.x - originalX, 2) + Math.pow(city.y - originalY, 2));
-
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    nearestCity = city;
-                }
-            });
-
-            // ✅ 가까운 도시가 있으면 업데이트
-            if (nearestCity && minDistance < 30) { // 클릭 범위 30px
-                updateTimeByImage(nearestCity.timezone, nearestCity.name);
-            } else {
-                alert(`좌표: X=${originalX}, Y=${originalY} (근처 도시 없음)`);
-            }
-        });
-
-        // ✅ 대한민국 & 세계 시간 업데이트 함수
         function getTimeInTimeZone(timeZone) {
             const now = new Date();
             return now.toLocaleString("ko-KR", {
@@ -163,7 +103,7 @@
             document.getElementById("selected-country").textContent = `🌍 ${countryName} 현재 시간`;
         }
 
-        // ✅ 1초마다 대한민국 시간 업데이트
+        // 1초마다 대한민국 시간 업데이트
         setInterval(updateTimes, 1000);
         updateTimes();
     </script>
