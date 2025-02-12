@@ -18,16 +18,19 @@
             justify-content: center;
             gap: 20px;
             width: 100%;
-            flex-wrap: wrap; /* 자동 줄바꿈 */
+            flex-wrap: wrap;
         }
-
-        /* 카드 스타일 (가변 크기) */
+        
         .clock-box {
-            flex: 1; /* 가변 크기 조정 */
-            min-width: 250px; /* 최소 크기 */
-            max-width: 400px; /* 최대 크기 */
+            display: inline-flex; /* 내부 요소 크기에 맞게 박스 조절 */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+            min-width: 200px; /* 최소 너비 */
+            max-width: 350px; /* 최대 너비 */
+            min-height: 100px; /* 최소 높이 */
             background: white;
-            padding: 20px;
             border-radius: 15px;
             box-shadow: 3px 3px 15px rgba(0, 0, 0, 0.2);
             text-align: center;
