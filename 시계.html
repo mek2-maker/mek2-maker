@@ -65,14 +65,35 @@
     <!-- 대한민국 시간 & 세계 시간 나란히 배치 -->
     <div class="clock-container">
         <div class="clock-box">
-            <p class="clock-title">🇰🇷 대한민국 현재 시간</p>
-            <p id="korea-time" class="clock-time">로딩 중...</p>
+            <p><strong>🇰🇷 대한민국 현재 시간</strong></p>
+            <p id="korea-time">2025. 02. 12.</p>
         </div>
         <div class="clock-box">
-            <p class="clock-title" id="selected-country"> 세계 도시를 선택하세요</p>
-            <p id="selected-time" class="clock-time">--:--:--</p>
+            <p><strong id="selected-country">🌍 세계 도시를 선택하세요</strong></p>
+            <p id="selected-time">--:--:--</p>
         </div>
     </div>
+    
+    <style>
+        .clock-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+    
+        .clock-box {
+            flex: 1;
+            min-width: 250px;
+            max-width: 350px;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 3px 3px 15px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+    </style>
 
     <!-- 세계 지도 이미지 -->
     <div class="map-container">
