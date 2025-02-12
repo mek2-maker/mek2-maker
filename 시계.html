@@ -11,19 +11,8 @@
             margin: 20px;
         }
         .clock-container {
-            display: flex;
-            justify-content: center;
-            gap: 50px; /* 대한민국 시간과 세계 시간 사이 간격 */
-            font-size: 24px;
             margin-top: 20px;
-            padding: 10px;
-        }
-        .clock-box {
-            border: 2px solid #007bff;
-            padding: 15px;
-            border-radius: 10px;
-            width: 300px;
-            background-color: #f8f9fa;
+            font-size: 24px;
         }
         img {
             max-width: 100%;
@@ -33,25 +22,15 @@
 </head>
 <body>
 
-    <h2>🌍 세계 시계</h2>
+    <h2>세계 시계</h2>
+    <p>🇰🇷 대한민국 현재 시간: <span id="korea-time">로딩 중...</span></p>
 
-    <!-- 대한민국 시간 & 세계 시간 나란히 배치 -->
-    <div class="clock-container">
-        <div class="clock-box">
-            <p><strong>🇰🇷 대한민국</strong> 현재 시간</p>
-            <p id="korea-time">로딩 중...</p>
-        </div>
-        <div class="clock-box">
-            <p><strong id="selected-country">🌎 세계</strong> 현재 시간</p>
-            <p id="selected-time">로딩 중...</p>
-        </div>
-    </div>
-
-    <!-- 세계 지도 이미지 -->
+    <!-- GitHub 이미지 -->
     <img src="https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/%ED%91%9C%EC%A4%80%EC%8B%9C%EA%B0%84%EB%8C%80.jpg" usemap="#worldmap" alt="세계 시간대 지도">
 
     <!-- 이미지맵: 각 도시 클릭 가능 -->
     <map name="worldmap">
+        <!-- 유럽 & 아프리카 -->
         <area shape="circle" coords="250,150,10" href="#" alt="오슬로" onclick="updateTimeByImage('Europe/Oslo', '오슬로')">
         <area shape="circle" coords="220,160,10" href="#" alt="런던" onclick="updateTimeByImage('Europe/London', '런던')">
         <area shape="circle" coords="240,180,10" href="#" alt="파리" onclick="updateTimeByImage('Europe/Paris', '파리')">
@@ -81,6 +60,11 @@
         <area shape="circle" coords="190,360,10" href="#" alt="리우데자네이루" onclick="updateTimeByImage('America/Sao_Paulo', '리우데자네이루')">
         <area shape="circle" coords="200,380,10" href="#" alt="부에노스아이레스" onclick="updateTimeByImage('America/Argentina/Buenos_Aires', '부에노스아이레스')">
     </map>
+
+    <div class="clock-container">
+        <p><strong id="selected-country">서울</strong> 현재 시간:</p>
+        <p id="selected-time">로딩 중...</p>
+    </div>
 
     <script>
         function getTimeInTimeZone(timeZone) {
