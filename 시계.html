@@ -16,18 +16,20 @@
         .clock-container {
             display: flex;
             justify-content: center;
-            gap: 50px;
-            margin-top: 40px;
+            gap: 20px;
+            width: 100%;
+            flex-wrap: wrap; /* 화면이 좁아지면 자동 줄바꿈 */
         }
         
-        /* 카드 스타일 */
         .clock-box {
+            flex: 1; /* 네모 박스가 자동으로 크기 조절됨 */
+            min-width: 250px; /* 최소 크기 */
+            max-width: 400px; /* 최대 크기 */
             background: white;
             padding: 20px;
             border-radius: 15px;
-            width: 320px;
             box-shadow: 3px 3px 15px rgba(0, 0, 0, 0.2);
-            transition: transform 0.2s ease-in-out;
+            text-align: center;
         }
 
         .clock-box:hover {
