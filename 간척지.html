@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대한민국 간척지 지도</title>
+
+    <!-- Leaflet 라이브러리 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+        }
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var map = L.map('map').setView([36.5, 126.5], 7);
+
+            // 지도 타일 추가
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://openstreetmap.org/copyright/">OpenStreetMap</a>'
+            }).addTo(map);
+
+            // GitHub Pages에 올린 HTML 파일을 로드하는 iframe URL
+            var githubBaseUrl = "https://mek2-maker.github.io/mek2-maker/Interactive_Map_Slide_Image_files/libs/iframe-0.0.1/";
+
+            var markerData = [
+                {
+                    coords: [37.458664, 126.441976],
+                    title: "인천공항",
+                    content: `<iframe src="${githubBaseUrl}incheon_change.html" width="600" height="400"></iframe>`
+                },
+                {
+                    coords: [35.818059, 126.477560],
+                    title: "새만금",
+                    content: `<iframe src="${githubBaseUrl}saemangeum_change.html" width="600" height="400"></iframe>`
+                },
+                {
+                    coords: [34.523302, 126.470449],
+                    title: "해남 간척지",
+                    content: `<iframe src="${githubBaseUrl}haenam_change.html" width="600" height="400"></iframe>`
+                },
+                {
+                    coords: [36.648893, 126.352627],
+                    title: "서산 지구",
+                    content: `<a href="https://www.youtube.com/watch?v=JPot5xfDlDg" target="_blank">서산 관련 영상 보기</a>`
+                }
+            ];
+
+            // 마커 추가 및 팝업 바인딩
+            markerData.forEach(function(data) {
+                var marker = L.marker(data.coords).addTo(map);
+                marker.bindPopup(`<b>${data.title}</b><br>${data.content}`);
+            });
+        });
+    </script>
+</body>
+</html>
