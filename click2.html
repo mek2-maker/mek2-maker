@@ -76,29 +76,30 @@
 
     // ✅ 도시별 상대 좌표 (비율)
     const cities = [
-      { name: "오슬로", timezone: "Europe/Oslo", x: 11.37, y: 29.67 },
-      { name: "런던", timezone: "Europe/London", x: 8.38, y: 33.50 },
-      { name: "파리", timezone: "Europe/Paris", x: 9.5, y: 35.00 },
-      { name: "모스크바", timezone: "Europe/Moscow", x: 19.25, y: 30.83 },
-      { name: "카이로", timezone: "Africa/Cairo", x: 17.13, y: 43.33 },
-      { name: "케이프타운", timezone: "Africa/Johannesburg", x: 14.00, y: 67.5 },
-      { name: "다카", timezone: "Asia/Dhaka", x: 33.37, y: 46.00 },
-      { name: "베이징", timezone: "Asia/Shanghai", x: 40.12, y: 39.83 },
-      { name: "서울", timezone: "Asia/Seoul", x: 43.5, y: 40.5 },
-      { name: "도쿄", timezone: "Asia/Tokyo", x: 46.5, y: 41.5 },
-      { name: "시드니", timezone: "Australia/Sydney", x: 49.88, y: 67.5 },
-      { name: "오클랜드", timezone: "Pacific/Auckland", x: 56.87, y: 69.17 },
-      { name: "앵커리지", timezone: "America/Anchorage", x: 66.13, y: 28.33 },
-      { name: "밴쿠버", timezone: "America/Vancouver", x: 74.00, y: 34.33 },
-      { name: "뉴욕", timezone: "America/New_York", x: 87.75, y: 38.33 },
-      { name: "워싱턴", timezone: "America/Washington", x: 87.12, y: 39.33 },
-      { name: "시애틀", timezone: "America/Washington", x: 74.38, y: 35.83 },
-      { name: "로스앤젤레스", timezone: "America/Washington", x: 75.5, y: 41.67 },
-      { name: "리마", timezone: "America/Lima", x: 86.88, y: 59.00 },
-      { name: "산티아고", timezone: "America/Santiago", x: 88.00, y: 67.83 },
-      { name: "리우데자네이루", timezone: "America/Santiago", x: 95.37, y: 63.00 },
-      { name: "부에노스아이레스", timezone: "America/Argentina/Buenos_Aires", x: 91.37, y: 68.00 }
-    ];
+  { name: "오슬로", timezone: "Europe/Oslo", x: 11.37, y: 29.67 },
+  { name: "런던", timezone: "Europe/London", x: 8.38, y: 33.50 },
+  { name: "파리", timezone: "Europe/Paris", x: 9.5, y: 35.00 },
+  { name: "모스크바", timezone: "Europe/Moscow", x: 19.25, y: 30.83 },
+  { name: "카이로", timezone: "Africa/Cairo", x: 17.13, y: 43.33 },
+  { name: "케이프타운", timezone: "Africa/Johannesburg", x: 14.00, y: 67.5 },
+  { name: "다카", timezone: "Asia/Dhaka", x: 33.37, y: 46.00 },
+  { name: "베이징", timezone: "Asia/Shanghai", x: 40.12, y: 39.83 },
+  { name: "서울", timezone: "Asia/Seoul", x: 43.5, y: 40.5 },
+  { name: "도쿄", timezone: "Asia/Tokyo", x: 46.5, y: 41.5 },
+  { name: "시드니", timezone: "Australia/Sydney", x: 49.88, y: 67.5 },
+  { name: "오클랜드", timezone: "Pacific/Auckland", x: 56.87, y: 69.17 },
+  { name: "앵커리지", timezone: "America/Anchorage", x: 66.13, y: 28.33 },
+  { name: "밴쿠버", timezone: "America/Vancouver", x: 74.00, y: 34.33 },
+  { name: "뉴욕", timezone: "America/New_York", x: 87.75, y: 38.33 },
+  { name: "워싱턴", timezone: "America/New_York", x: 87.12, y: 39.33 }, // ✔ 수정
+  { name: "시애틀", timezone: "America/Los_Angeles", x: 74.38, y: 35.83 }, // ✔ 수정
+  { name: "로스앤젤레스", timezone: "America/Los_Angeles", x: 75.5, y: 41.67 }, // ✔ 수정
+  { name: "리마", timezone: "America/Lima", x: 86.88, y: 59.00 },
+  { name: "산티아고", timezone: "America/Santiago", x: 88.00, y: 67.83 },
+  { name: "리우데자네이루", timezone: "America/Sao_Paulo", x: 95.37, y: 63.00 }, // ✔ 수정
+  { name: "부에노스아이레스", timezone: "America/Argentina/Buenos_Aires", x: 91.37, y: 68.00 }
+];
+
 
     // ✅ 클릭 가능한 위치 동적 생성
     function createMarkers() {
