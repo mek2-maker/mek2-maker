@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>세계 시계</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #ffffff !important;
+      margin: 20px;
+    }
+    .clock-container {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      flex-wrap: wrap;
+      padding: 10px 0;
+    }
+    .clock-box {
+      border: 3px solid #007bff;
+      padding: 10px;
+      border-radius: 10px;
+      width: 40%;
+      min-width: 250px;
+      background-color: #ffffff !important;
+      box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+    }
+    .map-container {
+      position: relative;
+      display: inline-block;
+      max-width: 90%;
+      width: 800px; /* 기본 크기 */
+    }
+    img {
+      width: 100%;
+      height: auto;
+    }
+    .map-marker {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background-color: red;
+      border-radius: 50%;
+      cursor: pointer;
+      transform: translate(-50%, -50%);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 대한민국 시간 & 세계 시간 나란히 배치 -->
+  <div class="clock-container">
+    <div class="clock-box">
+      <p><strong>🇰🇷 대한민국</strong> 현재 시간</p>
+      <p id="korea-time">로딩 중...</p>
+    </div>
+    <div class="clock-box">
+      <p><strong id="selected-country">🌎 세계</strong> 현재 시간</p>
+      <p id="selected-time">로딩 중...</p>
+    </div>
+  </div>
+
+  <!-- 세계 지도 -->
+  <div class="map-container">
+    <img id="world-map" src="https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/%ED%91%9C%EC%A4%80%EC%8B%9C%EA%B0%84%EB%8C%80.jpg" alt="세계 시간대 지도">
+  </div>
+
+  <script>
+    let selectedTimeZone = null;
+
+    // ✅ 원본 이미지 크기 (기준 크기)
+    const originalWidth = 800;
+    const originalHeight = 600;
+
+    // ✅ 도시별 상대 좌표 (비율)
+    const cities = [
+  { name: "오슬로", timezone: "Europe/Oslo", x: 11.37, y: 29.67 },
+  { name: "런던", timezone: "Europe/London", x: 8.38, y: 33.50 },
+  { name: "파리", timezone: "Europe/Paris", x: 9.5, y: 35.00 },
+  { name: "모스크바", timezone: "Europe/Moscow", x: 19.25, y: 30.83 },
+  { name: "카이로", timezone: "Africa/Cairo", x: 17.13, y: 43.33 },
+  { name: "케이프타운", timezone: "Africa/Johannesburg", x: 14.00, y: 67.5 },
+  { name: "다카", timezone: "Asia/Dhaka", x: 33.37, y: 46.00 },
+  { name: "베이징", timezone: "Asia/Shanghai", x: 40.12, y: 39.83 },
+  { name: "서울", timezone: "Asia/Seoul", x: 43.5, y: 40.5 },
+  { name: "도쿄", timezone: "Asia/Tokyo", x: 46.5, y: 41.5 },
+  { name: "시드니", timezone: "Australia/Sydney", x: 49.88, y: 67.5 },
+  { name: "오클랜드", timezone: "Pacific/Auckland", x: 56.87, y: 69.17 },
+  { name: "앵커리지", timezone: "America/Anchorage", x: 66.13, y: 28.33 },
+  { name: "밴쿠버", timezone: "America/Vancouver", x: 74.00, y: 34.33 },
+  { name: "뉴욕", timezone: "America/New_York", x: 87.75, y: 38.33 },
+  { name: "워싱턴", timezone: "America/New_York", x: 87.12, y: 39.33 }, // ✔ 수정
+  { name: "시애틀", timezone: "America/Los_Angeles", x: 74.38, y: 35.83 }, // ✔ 수정
+  { name: "로스앤젤레스", timezone: "America/Los_Angeles", x: 75.5, y: 41.67 }, // ✔ 수정
+  { name: "리마", timezone: "America/Lima", x: 86.88, y: 59.00 },
+  { name: "산티아고", timezone: "America/Santiago", x: 88.00, y: 67.83 },
+  { name: "리우데자네이루", timezone: "America/Sao_Paulo", x: 95.37, y: 63.00 }, // ✔ 수정
+  { name: "부에노스아이레스", timezone: "America/Argentina/Buenos_Aires", x: 91.37, y: 68.00 }
+];
+
+
+    // ✅ 클릭 가능한 위치 동적 생성
+    function createMarkers() {
+      const mapContainer = document.querySelector(".map-container");
+      cities.forEach(city => {
+        const marker = document.createElement("div");
+        marker.classList.add("map-marker");
+        marker.style.left = `${city.x}%`;
+        marker.style.top = `${city.y}%`;
+        marker.title = city.name;
+        marker.onclick = () => updateTimeByImage(city.timezone, city.name);
+        mapContainer.appendChild(marker);
+      });
+    }
+
+    // ✅ 대한민국 및 세계 시간 업데이트
+    function getTimeInTimeZone(timeZone) {
+      const now = new Date();
+      return now.toLocaleString("ko-KR", {
+        timeZone: timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+      });
+    }
+
+    function updateTimes() {
+      document.getElementById("korea-time").textContent = getTimeInTimeZone("Asia/Seoul");
+
+      if (selectedTimeZone) {
+        document.getElementById("selected-time").textContent = getTimeInTimeZone(selectedTimeZone);
+      }
+    }
+
+    function updateTimeByImage(timeZone, countryName) {
+      selectedTimeZone = timeZone;
+      document.getElementById("selected-time").textContent = getTimeInTimeZone(timeZone);
+      document.getElementById("selected-country").textContent = countryName;
+    }
+
+    // ✅ 1초마다 대한민국 및 세계 시간 업데이트
+    setInterval(updateTimes, 1000);
+    updateTimes();
+
+    // ✅ 창이 로드되면 마커 생성
+    window.onload = createMarkers;
+  </script>
+
+</body>
+</html>
