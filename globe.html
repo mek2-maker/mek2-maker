@@ -137,6 +137,13 @@
             }
         }
 
+        // 📌 창 크기 변경 시 카메라 업데이트 (찌그러짐 방지)
+        window.addEventListener("resize", function () {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
         init();
     </script>
 </body>
