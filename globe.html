@@ -74,6 +74,20 @@
             earth = new THREE.Mesh(geometry, material);
             scene.add(earth);
 
+            // ✅ 국가 좌표 디버깅
+            console.log("✅ 국가 좌표 데이터:", countryPositions);
+        
+            // 📍 대한민국 (KOR) 좌표에 마커 추가
+            if (countryPositions["KOR"]) {
+                let koreaPos = countryPositions["KOR"];
+                const markerGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+                const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+                marker.position.set(koreaPos.x, koreaPos.y, koreaPos.z);
+                scene.add(marker);
+                console.log("📍 대한민국 좌표:", koreaPos);
+            }
+            
             animate();
         }
 
