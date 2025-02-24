@@ -7,13 +7,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+    <!-- 국가 코드 입력 및 버튼 UI -->
     <div style="position: absolute; top: 10px; left: 10px; z-index: 10;">
         <input type="text" id="countryInput" placeholder="ISO_A3 코드 입력 (예: USA, CHN, IND)">
         <button onclick="moveToCountry()">국가 선택</button>
+        <button onclick="toggleRotation()">자동 회전 토글</button>
     </div>
 
     <script>
         let scene, camera, renderer, earth;
+        let isRotating = false; // 🌍 자동 회전 기본값: 꺼짐
         let countryBoundaries = {
             "KOR": {x: 0, y: 0, z: 2},
             "USA": {x: -1, y: -1, z: 2},
@@ -22,15 +25,27 @@
         };
 
         function init() {
+            console.log("Initializing Three.js...");
+
+            // Three.js 씬 생성
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 5);
+            camera.lookAt(0, 0, 0);
+
+            // 렌더러 생성 및 추가
             renderer = new THREE.WebGLRenderer();
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            // 🌍 지구본 텍스처 로드 (로컬 파일 사용 가능)
+            // 🌍 지구본 텍스처 로드
             const textureLoader = new THREE.TextureLoader();
-            const earthTexture = textureLoader.load('eo_base_2020_clean_geo.jpg'); // 사용자의 텍스처 파일
+            const earthTexture = textureLoader.load(
+                'eo_base_2020_clean_geo_resized.jpg',  // 로컬 파일 사용 가능
+                function (texture) { console.log("✅ Texture Loaded Successfully."); },
+                undefined,
+                function (error) { console.error("❌ Error loading texture:", error); }
+            );
 
             // 🌍 지구본 생성
             const geometry = new THREE.SphereGeometry(2, 50, 50);
@@ -38,19 +53,26 @@
             earth = new THREE.Mesh(geometry, material);
             scene.add(earth);
 
-            camera.position.z = 5;
             animate();
         }
 
         function animate() {
             requestAnimationFrame(animate);
+            if (isRotating) {
+                earth.rotation.y += 0.002;  // ✅ 자동 회전 ON/OFF 가능
+            }
             renderer.render(scene, camera);
+        }
+
+        function toggleRotation() {
+            isRotating = !isRotating;  // 🔄 자동 회전 ON/OFF
         }
 
         function moveToCountry() {
             const countryCode = document.getElementById("countryInput").value.toUpperCase();
             if (countryBoundaries[countryCode]) {
                 let targetPosition = countryBoundaries[countryCode];
+                isRotating = false;  // 🚀 국가 선택 시 자동 회전 멈춤
                 smoothCameraMove(targetPosition);
             } else {
                 alert("❌ 해당 국가 데이터 없음.");
