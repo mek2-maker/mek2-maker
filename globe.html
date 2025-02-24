@@ -6,7 +6,6 @@
     <title>Interactive 3D Globe</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="country_positions.js"></script> <!-- Python에서 변환한 좌표 데이터 -->
 </head>
 <body style="margin: 0; overflow: hidden;">
     <div style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px;">
@@ -17,11 +16,11 @@
 
     <script>
         let scene, camera, renderer, earth, controls;
-        let isRotating = false; 
+        let isRotating = false;
+        let countryPositions = {};
 
+        // Three.js 초기화
         function init() {
-            console.log("🌍 Initializing Three.js...");
-
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xffffff);
 
@@ -40,37 +39,31 @@
             controls.zoomSpeed = 0.5;
             controls.rotateSpeed = 0.5;
 
-            const light = new THREE.AmbientLight(0xffffff, 1);
-            scene.add(light);
+            // JSON 파일에서 좌표 불러오기
+            fetch("country_positions.json")
+                .then(response => response.json())
+                .then(data => {
+                    countryPositions = data;
+                    console.log("✅ 국가 좌표 데이터 로드 완료:", countryPositions);
+                })
+                .catch(error => console.error("❌ 좌표 데이터 로드 실패:", error));
 
             const textureLoader = new THREE.TextureLoader();
-            textureLoader.load(
-                'eo_base_2020_clean_geo_optimized.jpg', 
-                function (texture) {
-                    console.log("✅ 텍스처 로드 완료:", texture.image.width, texture.image.height);
-                    texture.wrapS = THREE.ClampToEdgeWrapping;
-                    texture.wrapT = THREE.ClampToEdgeWrapping;
-                    texture.minFilter = THREE.LinearFilter;
-
-                    const geometry = new THREE.SphereGeometry(2, 50, 50);
-                    geometry.scale(-1, 1, 1);
-                    geometry.computeVertexNormals();
-                    const material = new THREE.MeshBasicMaterial({ map: texture });
-                    earth = new THREE.Mesh(geometry, material);
-                    scene.add(earth);
-
-                    addDebugMarker("KOR", 0xff0000);
-                }
-            );
+            textureLoader.load('eo_base_2020_clean_geo.jpg', function (texture) {
+                const geometry = new THREE.SphereGeometry(2, 50, 50);
+                geometry.scale(-1, 1, 1);
+                geometry.computeVertexNormals();
+                const material = new THREE.MeshBasicMaterial({ map: texture });
+                earth = new THREE.Mesh(geometry, material);
+                scene.add(earth);
+            });
 
             animate();
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            if (isRotating) {
-                earth.rotation.y += 0.002;
-            }
+            if (isRotating) earth.rotation.y += 0.002;
             controls.update();
             renderer.render(scene, camera);
         }
@@ -81,17 +74,11 @@
 
         function moveToCountry() {
             const countryCode = document.getElementById("countryInput").value.toUpperCase();
-            if (countryPositions[countryCode]) {
-                let targetPosition = countryPositions[countryCode];
-                isRotating = false;
-                smoothCameraMove(targetPosition);
-            } else {
-                alert("❌ 해당 국가 데이터 없음.");
-            }
+            if (countryPositions[countryCode]) smoothCameraMove(countryPositions[countryCode]);
+            else alert("❌ 해당 국가 데이터 없음.");
         }
 
-        function smoothCameraMove(target) {
-            let steps = 60;
+        function smoothCameraMove(target, steps = 60) {
             let dx = (target.x - camera.position.x) / steps;
             let dy = (target.y - camera.position.y) / steps;
             let dz = (target.z - camera.position.z) / steps;
@@ -106,24 +93,6 @@
             }
             stepMove(0);
         }
-
-        function addDebugMarker(countryCode, color) {
-            if (countryPositions[countryCode]) {
-                let pos = countryPositions[countryCode];
-                const markerGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-                const markerMaterial = new THREE.MeshBasicMaterial({ color: color });
-                const marker = new THREE.Mesh(markerGeometry, markerMaterial);
-                marker.position.set(pos.x, pos.y, pos.z);
-                earth.add(marker);
-                console.log(`📍 ${countryCode} 좌표:`, pos);
-            }
-        }
-
-        window.addEventListener("resize", function () {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
 
         init();
     </script>
