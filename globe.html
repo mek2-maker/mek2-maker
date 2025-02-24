@@ -27,6 +27,8 @@
     <script>
         let scene, camera, renderer, earth, controls, light;
         let isRotating = false; // 자동 회전 기본값: OFF
+
+        // 📌 국가 좌표 데이터 (추후 업데이트 가능)
         let countryPositions = {
             "KOR": {x: 0, y: 0, z: 3},
             "USA": {x: -2, y: -1, z: 3},
@@ -62,11 +64,14 @@
 
             // 🌍 지구본 텍스처 로드
             const textureLoader = new THREE.TextureLoader();
-            const texturePath = 'eo_base_2020_clean_geo.jpg';  // ✅ 이미지 경로 확인
+            const texturePath = 'eo_base_2020_clean_geo_optimized.jpg';  // ✅ 최적화된 이미지 사용
 
             const earthTexture = textureLoader.load(
                 texturePath,
-                function (texture) { console.log("✅ Texture Loaded Successfully."); },
+                function (texture) { 
+                    console.log("✅ Optimized Texture Loaded Successfully.");
+                    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();  // ✅ 화질 개선
+                },
                 undefined,
                 function (error) { console.error("❌ Error loading texture:", error); }
             );
