@@ -19,19 +19,21 @@
         let isRotating = false;
         let countryPositions = {};
 
-        // Three.js 초기화
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xffffff);
+            scene.background = new THREE.Color(0xffffff); // 배경색 흰색 설정
 
+            // 카메라 설정
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 0, 5);
             camera.lookAt(0, 0, 0);
 
+            // 렌더러 생성
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
+            // 마우스 컨트롤 설정
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.1;
@@ -39,7 +41,7 @@
             controls.zoomSpeed = 0.5;
             controls.rotateSpeed = 0.5;
 
-            // JSON 파일에서 좌표 불러오기
+            // JSON 파일에서 국가 좌표 불러오기
             fetch("country_positions.json")
                 .then(response => response.json())
                 .then(data => {
@@ -48,12 +50,12 @@
                 })
                 .catch(error => console.error("❌ 좌표 데이터 로드 실패:", error));
 
+            // 🌍 텍스처 로드 및 지구본 생성
             const textureLoader = new THREE.TextureLoader();
-            textureLoader.load('eo_base_2020_clean_geo_optimized.jpg', function (texture) {
-                const geometry = new THREE.SphereGeometry(2, 50, 50);
-                geometry.scale(-1, 1, 1);
-                geometry.computeVertexNormals();
+            textureLoader.load('eo_base_2020_clean_geo.jpg', function (texture) {
+                const geometry = new THREE.SphereGeometry(2, 64, 64); // 세그먼트 증가로 부드러운 구 생성
                 const material = new THREE.MeshBasicMaterial({ map: texture });
+
                 earth = new THREE.Mesh(geometry, material);
                 scene.add(earth);
             });
@@ -63,7 +65,7 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            if (isRotating) earth.rotation.y += 0.002;
+            if (isRotating) earth.rotation.y += 0.002; // 자동 회전 옵션
             controls.update();
             renderer.render(scene, camera);
         }
@@ -74,8 +76,11 @@
 
         function moveToCountry() {
             const countryCode = document.getElementById("countryInput").value.toUpperCase();
-            if (countryPositions[countryCode]) smoothCameraMove(countryPositions[countryCode]);
-            else alert("❌ 해당 국가 데이터 없음.");
+            if (countryPositions[countryCode]) {
+                smoothCameraMove(countryPositions[countryCode]);
+            } else {
+                alert("❌ 해당 국가 데이터 없음.");
+            }
         }
 
         function smoothCameraMove(target, steps = 60) {
