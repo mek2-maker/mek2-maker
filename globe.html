@@ -58,30 +58,27 @@
             controls.zoomSpeed = 0.5;
             controls.rotateSpeed = 0.5;
 
-            // 💡 고품질 조명 추가
-            light = new THREE.AmbientLight(0xffffff, 1.5);
+            // 🌍 조명 설정 (기존 1.5 → 0.5로 조절)
+            light = new THREE.AmbientLight(0xffffff, 0.5); 
             scene.add(light);
-
-            // 🌍 지구본 텍스처 로드
+            
+            // 🌍 텍스처 로드 (감마 보정 추가)
             const textureLoader = new THREE.TextureLoader();
-            const texturePath = 'eo_base_2020_clean_geo_optimized.jpg';  // ✅ 최적화된 이미지 사용
-
             const earthTexture = textureLoader.load(
-                texturePath,
-                function (texture) { 
+                'eo_base_2020_clean_geo_optimized.jpg',
+                function (texture) {
                     console.log("✅ Optimized Texture Loaded Successfully.");
-                    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();  // ✅ 화질 개선
-                },
-                undefined,
-                function (error) { console.error("❌ Error loading texture:", error); }
+                    texture.encoding = THREE.sRGBEncoding;  // ✅ 감마 보정 적용
+                    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();  
+                }
             );
-
-            // 🌍 지구본 생성 (MeshStandardMaterial로 개선)
+            
+            // 🌍 지구본 생성 (MeshPhongMaterial로 변경)
             const geometry = new THREE.SphereGeometry(2, 50, 50);
-            const material = new THREE.MeshStandardMaterial({ map: earthTexture });
+            const material = new THREE.MeshPhongMaterial({ map: earthTexture }); // ✅ PhongMaterial 적용
             earth = new THREE.Mesh(geometry, material);
             scene.add(earth);
-
+            
             animate();
         }
 
