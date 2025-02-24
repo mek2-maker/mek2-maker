@@ -52,7 +52,7 @@
 
             // 🌍 텍스처 로드 및 지구본 생성
             const textureLoader = new THREE.TextureLoader();
-            textureLoader.load('eo_base_2020_clean_geo_optimized.jpg', function (texture) {
+            textureLoader.load('eo_base_2020_clean_geo.jpg', function (texture) {
                 const geometry = new THREE.SphereGeometry(2, 64, 64); // 세그먼트 증가로 부드러운 구 생성
                 const material = new THREE.MeshBasicMaterial({ map: texture });
 
