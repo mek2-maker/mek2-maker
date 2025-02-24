@@ -3,49 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Optimized 3D Globe</title>
+    <title>Interactive 3D Globe</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.min.js"></script>
-    <script src="country_positions.js"></script> <!-- ✅ Python에서 생성한 국가 좌표 데이터 -->
-    <style>
-        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
-        #ui-container {
-            position: absolute; top: 10px; left: 10px; z-index: 10;
-            background: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 5px;
-        }
-        input, button { padding: 5px; margin: 2px; }
-    </style>
+    <script src="country_positions.js"></script> <!-- Python에서 변환한 좌표 데이터 -->
 </head>
-<body>
-    <!-- UI 패널 -->
-    <div id="ui-container">
+<body style="margin: 0; overflow: hidden;">
+    <div style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px;">
         <input type="text" id="countryInput" placeholder="ISO_A3 코드 입력 (예: USA, CHN, IND)">
         <button onclick="moveToCountry()">국가 선택</button>
         <button onclick="toggleRotation()">자동 회전 토글</button>
     </div>
 
     <script>
-        let scene, camera, renderer, earth, controls, light;
-        let isRotating = false;
+        let scene, camera, renderer, earth, controls;
+        let isRotating = false; 
 
         function init() {
             console.log("🌍 Initializing Three.js...");
 
-            // Three.js 씬 생성
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xffffff); // 배경을 흰색으로 설정
+            scene.background = new THREE.Color(0xffffff);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 0, 5);
             camera.lookAt(0, 0, 0);
 
-            // 렌더러 생성 및 추가
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            // 마우스 회전 & 줌 가능하도록 설정
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.1;
@@ -53,26 +40,28 @@
             controls.zoomSpeed = 0.5;
             controls.rotateSpeed = 0.5;
 
-            // 조명 추가
-            light = new THREE.AmbientLight(0xffffff, 0.5);
+            const light = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(light);
 
-            // 🌍 텍스처 로드
             const textureLoader = new THREE.TextureLoader();
-            const earthTexture = textureLoader.load(
-                'eo_base_2020_clean_geo_optimized.jpg',
+            textureLoader.load(
+                'eo_base_2020_clean_geo_optimized.jpg', 
                 function (texture) {
-                    console.log("✅ Optimized Texture Loaded Successfully.");
-                    texture.encoding = THREE.sRGBEncoding;
-                    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();  
+                    console.log("✅ 텍스처 로드 완료:", texture.image.width, texture.image.height);
+                    texture.wrapS = THREE.ClampToEdgeWrapping;
+                    texture.wrapT = THREE.ClampToEdgeWrapping;
+                    texture.minFilter = THREE.LinearFilter;
+
+                    const geometry = new THREE.SphereGeometry(2, 50, 50);
+                    geometry.scale(-1, 1, 1);
+                    geometry.computeVertexNormals();
+                    const material = new THREE.MeshBasicMaterial({ map: texture });
+                    earth = new THREE.Mesh(geometry, material);
+                    scene.add(earth);
+
+                    addDebugMarker("KOR", 0xff0000);
                 }
             );
-
-            // 🌍 지구본 생성
-            const geometry = new THREE.SphereGeometry(2, 50, 50);
-            const material = new THREE.MeshPhongMaterial({ map: earthTexture });
-            earth = new THREE.Mesh(geometry, material);
-            scene.add(earth);
 
             animate();
         }
@@ -84,7 +73,6 @@
             }
             controls.update();
             renderer.render(scene, camera);
-            TWEEN.update();
         }
 
         function toggleRotation() {
@@ -94,27 +82,48 @@
         function moveToCountry() {
             const countryCode = document.getElementById("countryInput").value.toUpperCase();
             if (countryPositions[countryCode]) {
-                let target = countryPositions[countryCode];
+                let targetPosition = countryPositions[countryCode];
                 isRotating = false;
-                smoothCameraMove(target);
+                smoothCameraMove(targetPosition);
             } else {
                 alert("❌ 해당 국가 데이터 없음.");
             }
         }
 
         function smoothCameraMove(target) {
-            let startPos = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
-            let targetPos = { x: target.x, y: target.y, z: target.z };
+            let steps = 60;
+            let dx = (target.x - camera.position.x) / steps;
+            let dy = (target.y - camera.position.y) / steps;
+            let dz = (target.z - camera.position.z) / steps;
 
-            new TWEEN.Tween(startPos)
-                .to(targetPos, 2000)
-                .easing(TWEEN.Easing.Quadratic.Out)
-                .onUpdate(() => {
-                    camera.position.set(startPos.x, startPos.y, startPos.z);
-                    controls.update();
-                })
-                .start();
+            function stepMove(i) {
+                if (i >= steps) return;
+                camera.position.x += dx;
+                camera.position.y += dy;
+                camera.position.z += dz;
+                controls.update();
+                setTimeout(() => stepMove(i + 1), 20);
+            }
+            stepMove(0);
         }
+
+        function addDebugMarker(countryCode, color) {
+            if (countryPositions[countryCode]) {
+                let pos = countryPositions[countryCode];
+                const markerGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+                const markerMaterial = new THREE.MeshBasicMaterial({ color: color });
+                const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+                marker.position.set(pos.x, pos.y, pos.z);
+                earth.add(marker);
+                console.log(`📍 ${countryCode} 좌표:`, pos);
+            }
+        }
+
+        window.addEventListener("resize", function () {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
         init();
     </script>
