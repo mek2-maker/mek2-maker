@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive 3D Globe</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
-    <!-- 국가 코드 입력 및 버튼 UI -->
+    <!-- UI 버튼 -->
     <div style="position: absolute; top: 10px; left: 10px; z-index: 10;">
         <input type="text" id="countryInput" placeholder="ISO_A3 코드 입력 (예: USA, CHN, IND)">
         <button onclick="moveToCountry()">국가 선택</button>
@@ -15,8 +16,8 @@
     </div>
 
     <script>
-        let scene, camera, renderer, earth;
-        let isRotating = false; // 🌍 자동 회전 기본값: 꺼짐
+        let scene, camera, renderer, earth, controls;
+        let isRotating = false; // 자동 회전 기본값: OFF
         let countryBoundaries = {
             "KOR": {x: 0, y: 0, z: 2},
             "USA": {x: -1, y: -1, z: 2},
@@ -38,10 +39,18 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
+            // 🌍 마우스로 회전 & 줌 가능하도록 설정 (OrbitControls 추가)
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;  // 부드러운 움직임
+            controls.dampingFactor = 0.1;
+            controls.enableZoom = true;     // 줌 기능 활성화
+            controls.zoomSpeed = 0.5;
+            controls.rotateSpeed = 0.5;     // 마우스 드래그 속도 설정
+
             // 🌍 지구본 텍스처 로드
             const textureLoader = new THREE.TextureLoader();
             const earthTexture = textureLoader.load(
-                'eo_base_2020_clean_geo_resized.jpg',  // 로컬 파일 사용 가능
+                'eo_base_2020_clean_geo_resized.jpg',  
                 function (texture) { console.log("✅ Texture Loaded Successfully."); },
                 undefined,
                 function (error) { console.error("❌ Error loading texture:", error); }
@@ -61,6 +70,7 @@
             if (isRotating) {
                 earth.rotation.y += 0.002;  // ✅ 자동 회전 ON/OFF 가능
             }
+            controls.update();  // 🖱️ 마우스 조작 반영
             renderer.render(scene, camera);
         }
 
@@ -90,6 +100,7 @@
                 camera.position.x += dx;
                 camera.position.y += dy;
                 camera.position.z += dz;
+                controls.update(); // 🖱️ 마우스 조작과 카메라 이동 동기화
                 setTimeout(() => stepMove(i + 1), 20);
             }
             stepMove(0);
