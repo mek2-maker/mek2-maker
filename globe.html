@@ -3,30 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive 3D Globe</title>
+    <title>Optimized 3D Globe</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
+        #ui-container {
+            position: absolute; top: 10px; left: 10px; z-index: 10;
+            background: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 5px;
+        }
+        input, button { padding: 5px; margin: 2px; }
+    </style>
 </head>
 <body>
-    <!-- UI 버튼 -->
-    <div style="position: absolute; top: 10px; left: 10px; z-index: 10;">
+    <!-- UI 패널 -->
+    <div id="ui-container">
         <input type="text" id="countryInput" placeholder="ISO_A3 코드 입력 (예: USA, CHN, IND)">
         <button onclick="moveToCountry()">국가 선택</button>
         <button onclick="toggleRotation()">자동 회전 토글</button>
     </div>
 
     <script>
-        let scene, camera, renderer, earth, controls;
+        let scene, camera, renderer, earth, controls, light;
         let isRotating = false; // 자동 회전 기본값: OFF
-        let countryBoundaries = {
-            "KOR": {x: 0, y: 0, z: 2},
-            "USA": {x: -1, y: -1, z: 2},
-            "CHN": {x: 1, y: 1, z: 2},
-            "IND": {x: 1.5, y: -1.5, z: 2}
+        let countryPositions = {
+            "KOR": {x: 0, y: 0, z: 3},
+            "USA": {x: -2, y: -1, z: 3},
+            "CHN": {x: 2, y: 1, z: 3},
+            "IND": {x: 1.5, y: -1.5, z: 3}
         };
 
         function init() {
-            console.log("Initializing Three.js...");
+            console.log("🌍 Initializing Three.js...");
 
             // Three.js 씬 생성
             scene = new THREE.Scene();
@@ -35,30 +44,36 @@
             camera.lookAt(0, 0, 0);
 
             // 렌더러 생성 및 추가
-            renderer = new THREE.WebGLRenderer();
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            // 🌍 마우스로 회전 & 줌 가능하도록 설정 (OrbitControls 추가)
+            // 🌍 마우스 회전 & 줌 가능하도록 설정 (OrbitControls 추가)
             controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;  // 부드러운 움직임
+            controls.enableDamping = true;
             controls.dampingFactor = 0.1;
-            controls.enableZoom = true;     // 줌 기능 활성화
+            controls.enableZoom = true;
             controls.zoomSpeed = 0.5;
-            controls.rotateSpeed = 0.5;     // 마우스 드래그 속도 설정
+            controls.rotateSpeed = 0.5;
+
+            // 💡 고품질 조명 추가
+            light = new THREE.AmbientLight(0xffffff, 1.5);
+            scene.add(light);
 
             // 🌍 지구본 텍스처 로드
             const textureLoader = new THREE.TextureLoader();
+            const texturePath = 'eo_base_2020_clean_geo.jpg';  // ✅ 이미지 경로 확인
+
             const earthTexture = textureLoader.load(
-                'eo_base_2020_clean_geo.jpg',  
+                texturePath,
                 function (texture) { console.log("✅ Texture Loaded Successfully."); },
                 undefined,
                 function (error) { console.error("❌ Error loading texture:", error); }
             );
 
-            // 🌍 지구본 생성
+            // 🌍 지구본 생성 (MeshStandardMaterial로 개선)
             const geometry = new THREE.SphereGeometry(2, 50, 50);
-            const material = new THREE.MeshBasicMaterial({ map: earthTexture });
+            const material = new THREE.MeshStandardMaterial({ map: earthTexture });
             earth = new THREE.Mesh(geometry, material);
             scene.add(earth);
 
@@ -68,42 +83,40 @@
         function animate() {
             requestAnimationFrame(animate);
             if (isRotating) {
-                earth.rotation.y += 0.002;  // ✅ 자동 회전 ON/OFF 가능
+                earth.rotation.y += 0.002;
             }
-            controls.update();  // 🖱️ 마우스 조작 반영
+            controls.update();
             renderer.render(scene, camera);
+            TWEEN.update(); // 카메라 이동을 부드럽게 적용
         }
 
         function toggleRotation() {
-            isRotating = !isRotating;  // 🔄 자동 회전 ON/OFF
+            isRotating = !isRotating;
         }
 
         function moveToCountry() {
             const countryCode = document.getElementById("countryInput").value.toUpperCase();
-            if (countryBoundaries[countryCode]) {
-                let targetPosition = countryBoundaries[countryCode];
-                isRotating = false;  // 🚀 국가 선택 시 자동 회전 멈춤
-                smoothCameraMove(targetPosition);
+            if (countryPositions[countryCode]) {
+                let target = countryPositions[countryCode];
+                isRotating = false;
+                smoothCameraMove(target);
             } else {
                 alert("❌ 해당 국가 데이터 없음.");
             }
         }
 
         function smoothCameraMove(target) {
-            let steps = 60;
-            let dx = (target.x - camera.position.x) / steps;
-            let dy = (target.y - camera.position.y) / steps;
-            let dz = (target.z - camera.position.z) / steps;
+            let startPos = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
+            let targetPos = { x: target.x, y: target.y, z: target.z };
 
-            function stepMove(i) {
-                if (i >= steps) return;
-                camera.position.x += dx;
-                camera.position.y += dy;
-                camera.position.z += dz;
-                controls.update(); // 🖱️ 마우스 조작과 카메라 이동 동기화
-                setTimeout(() => stepMove(i + 1), 20);
-            }
-            stepMove(0);
+            new TWEEN.Tween(startPos)
+                .to(targetPos, 2000) // 2초 동안 이동
+                .easing(TWEEN.Easing.Quadratic.Out)
+                .onUpdate(() => {
+                    camera.position.set(startPos.x, startPos.y, startPos.z);
+                    controls.update();
+                })
+                .start();
         }
 
         init();
