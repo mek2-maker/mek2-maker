@@ -57,22 +57,31 @@
             light = new THREE.AmbientLight(0xffffff, 1);
             scene.add(light);
 
-            // 🌍 텍스처 로드
+            // 🌍 Three.js에서 지구본 텍스처 로드 (크기 유지)
             const textureLoader = new THREE.TextureLoader();
             const earthTexture = textureLoader.load(
-                'eo_base_2020_clean_geo.jpg',
+                'eo_base_2020_clean_geo_optimized.jpg',
                 function (texture) {
-                    console.log("✅ Optimized Texture Loaded Successfully.");
-                    texture.encoding = THREE.sRGBEncoding;
-                    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();  
+                    console.log("✅ 텍스처 로드 완료:", texture.image.width, texture.image.height);
+                    texture.wrapS = THREE.ClampToEdgeWrapping;
+                    texture.wrapT = THREE.ClampToEdgeWrapping;
+                    texture.minFilter = THREE.LinearFilter;
+                    texture.magFilter = THREE.LinearFilter;
+                    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
                 }
             );
-
-            // 🌍 지구본 생성
+            
+            // 🌍 지구본 생성 (UV 보정)
             const geometry = new THREE.SphereGeometry(2, 50, 50);
-            const material = new THREE.MeshPhongMaterial({ map: earthTexture });
+            geometry.scale(-1, 1, 1);  // **UV 좌표 반전 방지**
+            geometry.computeVertexNormals();  // **조명 적용 개선**
+            const material = new THREE.MeshBasicMaterial({ map: earthTexture });
             earth = new THREE.Mesh(geometry, material);
             scene.add(earth);
+            
+            // ✅ 디버깅 코드
+            console.log("✅ 지구본 텍스처 크기:", earthTexture.image.width, earthTexture.image.height);
+            console.log("✅ Three.js에서 UV 매핑 테스트:", geometry.getAttribute("uv"));
 
             // ✅ 국가 좌표 디버깅
             console.log("✅ 국가 좌표 데이터:", countryPositions);
