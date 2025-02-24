@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Globe</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div style="position: absolute; top: 10px; left: 10px; z-index: 10;">
+        <input type="text" id="countryInput" placeholder="ISO_A3 코드 입력 (예: USA, CHN, IND)">
+        <button onclick="moveToCountry()">국가 선택</button>
+    </div>
+
+    <script>
+        let scene, camera, renderer, earth;
+        let countryBoundaries = {
+            "KOR": {x: 0, y: 0, z: 2},
+            "USA": {x: -1, y: -1, z: 2},
+            "CHN": {x: 1, y: 1, z: 2},
+            "IND": {x: 1.5, y: -1.5, z: 2}
+        };
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // 🌍 지구본 텍스처 로드 (로컬 파일 사용 가능)
+            const textureLoader = new THREE.TextureLoader();
+            const earthTexture = textureLoader.load('eo_base_2020_clean_geo.jpg'); // 사용자의 텍스처 파일
+
+            // 🌍 지구본 생성
+            const geometry = new THREE.SphereGeometry(2, 50, 50);
+            const material = new THREE.MeshBasicMaterial({ map: earthTexture });
+            earth = new THREE.Mesh(geometry, material);
+            scene.add(earth);
+
+            camera.position.z = 5;
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            earth.rotation.y += 0.002;
+            renderer.render(scene, camera);
+        }
+
+        function moveToCountry() {
+            const countryCode = document.getElementById("countryInput").value.toUpperCase();
+            if (countryBoundaries[countryCode]) {
+                let targetPosition = countryBoundaries[countryCode];
+                smoothCameraMove(targetPosition);
+            } else {
+                alert("❌ 해당 국가 데이터 없음.");
+            }
+        }
+
+        function smoothCameraMove(target) {
+            let steps = 60;
+            let dx = (target.x - camera.position.x) / steps;
+            let dy = (target.y - camera.position.y) / steps;
+            let dz = (target.z - camera.position.z) / steps;
+
+            function stepMove(i) {
+                if (i >= steps) return;
+                camera.position.x += dx;
+                camera.position.y += dy;
+                camera.position.z += dz;
+                setTimeout(() => stepMove(i + 1), 20);
+            }
+            stepMove(0);
+        }
+
+        init();
+    </script>
+</body>
+</html>
