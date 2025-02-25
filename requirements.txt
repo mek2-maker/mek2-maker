@@ -1,3 +1,6 @@
-Flask
+flask
+pyvista
+pyvistaqt
+PyQt5
 numpy
-gunicorn
+geopandas
