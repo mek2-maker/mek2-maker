@@ -1,6 +1,10 @@
 Flask
 gunicorn
+flask-socketio
 geopandas
 pyvista
 pyvistaqt
 numpy
+PyQt5
+PyQt5-sip
+xvfbwrapper
