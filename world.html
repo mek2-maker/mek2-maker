@@ -30,10 +30,9 @@
   <!-- Three.js 및 기타 라이브러리 모듈 불러오기 -->
   <script type="module">
     // GitHub에 업로드한 파일들의 raw URL로 import 구문 수정
-    import * as THREE from 'https://raw.githubusercontent.com/YourUserName/YourRepository/main/libs/three.module.js';
-    import { OrbitControls } from 'https://raw.githubusercontent.com/YourUserName/YourRepository/main/libs/OrbitControls.js';
-    import TWEEN from 'https://raw.githubusercontent.com/YourUserName/YourRepository/main/libs/tween.esm.js';
-
+    import * as THREE from './libs/three.module.js';
+    import { OrbitControls } from './libs/OrbitControls.js';
+    import TWEEN from './libs/tween.esm.js';
     // 전역 변수들
     let scene, camera, renderer, controls;
     let globeMesh, boundaryLine;
