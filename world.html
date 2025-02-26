@@ -63,7 +63,7 @@
       // 텍스처를 입힌 지구본 생성
       const sphereGeometry = new THREE.SphereGeometry(globeRadius, 64, 64);
       const textureLoader = new THREE.TextureLoader();
-      const texture = textureLoader.load('eo_base_2020_clean_geo.jpg');
+      const texture = textureLoader.load('eo_base_2020_clean_geo_optimized.jpg');
       const sphereMaterial = new THREE.MeshBasicMaterial({ map: texture });
       globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
       scene.add(globeMesh);
