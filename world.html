@@ -97,7 +97,7 @@
         .then(data => {
           countryGeoJSON = data;
           // 초기 화면 구성: "Korea" 자동 검색
-          document.getElementById('iso-code').value = "Korea";
+          document.getElementById('iso-code').value = "South Korea";
           searchCountries();
         })
         .catch(err => console.error('GeoJSON 로드 실패:', err));
