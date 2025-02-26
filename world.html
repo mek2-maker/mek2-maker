@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>인터랙티브 3D 지구본 (국가명 검색 지원)</title>
-  <!-- 임시로 CSP에서 unsafe-inline 허용 (운영 환경에서는 nonce나 해시 적용 권장) -->
+  <title>인터랙티브 3D 지구본 (국가명 부분 검색 지원)</title>
+  <!-- 임시 CSP: 개발 시 unsafe-inline 허용 (운영 환경에서는 nonce나 해시 사용 권장) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <style>
     body { margin: 0; overflow: hidden; }
@@ -124,7 +124,7 @@
       renderer.render(scene, camera);
     }
 
-    // 검색어로 국가 목록을 찾고 결과를 표시
+    // 검색어를 기반으로 국가 목록을 찾아 결과를 표시
     function searchCountries() {
       const searchTerm = document.getElementById('iso-code').value.trim().toLowerCase();
       const resultsDiv = document.getElementById('results');
@@ -135,7 +135,7 @@
         return;
       }
       
-      // 공식 국가명 (ADMIN)에서 검색어가 포함된 국가 찾기
+      // 공식 국가명(ADMIN)에서 검색어가 포함된 국가 찾기 (부분 검색)
       const matches = countryGeoJSON.features.filter(feature => {
         const name = getCountryName(feature).toLowerCase();
         return name.indexOf(searchTerm) !== -1;
@@ -146,25 +146,19 @@
         return;
       }
       
-      if (matches.length === 1) {
-        // 한 개만 있으면 바로 선택
-        displayCountry(matches[0]);
-        resultsDiv.innerHTML = ""; // 결과 목록 숨김
-      } else {
-        // 여러 개 일 경우 결과 목록 표시
-        matches.forEach(feature => {
-          const div = document.createElement('div');
-          div.className = "result-item";
-          div.textContent = getCountryName(feature) + " (" + feature.properties.ISO_A3 + ")";
-          div.addEventListener('click', () => {
-            // 클릭하면 해당 국가 선택
-            displayCountry(feature);
-            resultsDiv.innerHTML = ""; // 목록 닫기
-            document.getElementById('iso-code').value = getCountryName(feature);
-          });
-          resultsDiv.appendChild(div);
+      // 결과 목록 표시
+      matches.forEach(feature => {
+        const div = document.createElement('div');
+        div.className = "result-item";
+        div.textContent = getCountryName(feature) + " (" + feature.properties.ISO_A3 + ")";
+        div.addEventListener('click', () => {
+          // 클릭 시 해당 국가 선택 후 경계선 표시
+          displayCountry(feature);
+          resultsDiv.innerHTML = ""; // 목록 닫기
+          document.getElementById('iso-code').value = getCountryName(feature);
         });
-      }
+        resultsDiv.appendChild(div);
+      });
     }
 
     // 선택된 국가의 경계선을 그리고 카메라 이동
@@ -190,14 +184,14 @@
         points.push(points[0]);
       }
       
-      // 경계선 색상: 만약 ISO_A3가 "KOR"이면 파란색, 아니면 빨간색
+      // 경계선 색상: 대한민국(KOR)은 파란색, 그 외는 빨간색
       const isoCode = feature.properties.ISO_A3;
       const lineColor = isoCode === "KOR" ? 0x0000ff : 0xff0000;
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       const material = new THREE.LineBasicMaterial({ color: lineColor });
       const newBoundaryLine = new THREE.Line(geometry, material);
       
-      // 대한민국 경계선은 koreaBoundaryLine에 저장, 그 외는 currentBoundaryLine에 저장
+      // 대한민국 경계선은 koreaBoundaryLine에 저장, 나머지는 currentBoundaryLine에 저장
       if (isoCode === "KOR") {
         if (koreaBoundaryLine) {
           scene.remove(koreaBoundaryLine);
