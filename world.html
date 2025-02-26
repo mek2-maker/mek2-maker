@@ -55,7 +55,7 @@
     let countryGeoJSON = null;
     const globeRadius = 1;
 
-    // 공식 국가명을 반환하는 헬퍼 함수 (GeoJSON의 ADMIN 프로퍼티 사용)
+    // 공식 국가명을 반환하는 헬퍼 함수 (GeoJSON의 ADMIN 필드 사용)
     function getCountryName(feature) {
       return feature.properties.ADMIN;
     }
@@ -86,7 +86,7 @@
       // 텍스처를 입힌 지구본 생성
       const sphereGeometry = new THREE.SphereGeometry(globeRadius, 64, 64);
       const textureLoader = new THREE.TextureLoader();
-      const texture = textureLoader.load('eo_base_2020_clean_geo_optimized.jpg');
+      const texture = textureLoader.load('eo_base_2020_clean_geo.jpg');
       const sphereMaterial = new THREE.MeshBasicMaterial({ map: texture });
       globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
       scene.add(globeMesh);
@@ -97,7 +97,7 @@
         .then(data => {
           countryGeoJSON = data;
           // 초기 화면 구성: "Korea" 자동 검색
-          document.getElementById('iso-code').value = "South Korea";
+          document.getElementById('iso-code').value = "Korea";
           searchCountries();
         })
         .catch(err => console.error('GeoJSON 로드 실패:', err));
@@ -124,7 +124,8 @@
       renderer.render(scene, camera);
     }
 
-    // 검색어를 기반으로 국가 목록을 찾아 결과를 표시 (대소문자 구분 없이)
+    // 검색어를 기반으로 국가 목록을 찾아 결과를 표시
+    // 검색 결과가 1개라면 바로 해당 국가 선택
     function searchCountries() {
       const searchTerm = document.getElementById('iso-code').value.trim().toLowerCase();
       const resultsDiv = document.getElementById('results');
@@ -146,19 +147,25 @@
         return;
       }
       
-      // 결과 목록 표시
-      matches.forEach(feature => {
-        const div = document.createElement('div');
-        div.className = "result-item";
-        div.textContent = getCountryName(feature) + " (" + feature.properties.ISO_A3 + ")";
-        div.addEventListener('click', () => {
-          // 클릭하면 해당 국가 선택 후 경계선 표시
-          displayCountry(feature);
-          resultsDiv.innerHTML = ""; // 결과 목록 숨김
-          document.getElementById('iso-code').value = getCountryName(feature);
+      if (matches.length === 1) {
+        // 결과가 한 개이면 바로 선택하여 화면 이동
+        displayCountry(matches[0]);
+        resultsDiv.innerHTML = "";
+      } else {
+        // 여러 개인 경우 결과 목록 표시
+        matches.forEach(feature => {
+          const div = document.createElement('div');
+          div.className = "result-item";
+          div.textContent = getCountryName(feature) + " (" + feature.properties.ISO_A3 + ")";
+          div.addEventListener('click', () => {
+            // 클릭하면 해당 국가 선택 후 경계선 표시
+            displayCountry(feature);
+            resultsDiv.innerHTML = ""; // 목록 닫기
+            document.getElementById('iso-code').value = getCountryName(feature);
+          });
+          resultsDiv.appendChild(div);
         });
-        resultsDiv.appendChild(div);
-      });
+      }
     }
 
     // 선택된 국가의 경계선을 그리고 카메라 이동
