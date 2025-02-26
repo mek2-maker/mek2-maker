@@ -1,10 +1,15 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <!-- GitHub의 raw 콘텐츠를 허용하도록 CSP 수정 -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://raw.githubusercontent.com; script-src 'self' 'unsafe-inline' https://raw.githubusercontent.com; style-src 'self' 'unsafe-inline'">
   <meta charset="UTF-8">
-  <title>인터랙티브 3D 지구본 (Three.js GitHub 버전)</title>
+  <title>인터랙티브 3D 지구본 (Three.js 버전)</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./libs/three.module.js"
+    }
+  }
+  </script>
   <style>
     body { margin: 0; overflow: hidden; }
     #overlay {
@@ -27,15 +32,13 @@
     <button id="submit-btn">국가 선택</button>
   </div>
 
-  <!-- Three.js 및 기타 라이브러리 모듈 불러오기 -->
   <script type="module">
-    // GitHub에 업로드한 파일들의 raw URL로 import 구문 수정
-    import * as THREE from './libs/three.module.js';
-    import { OrbitControls } from './libs/OrbitControls.js';
-    import TWEEN from './libs/tween.esm.js';
-    // 전역 변수들
+    import * as THREE from "./libs/three.module.js";
+    import { OrbitControls } from "./libs/OrbitControls.js";
+    import TWEEN from "./libs/tween.esm.js";
+
     let scene, camera, renderer, controls;
-    let globeMesh, boundaryLine;
+    let globeMesh, boundaryLine, koreaBoundary;
     let countryGeoJSON = null;
     const globeRadius = 1;
 
@@ -49,7 +52,6 @@
       return new THREE.Vector3(x, y, z);
     }
 
-    // 초기화 함수: 씬, 카메라, 렌더러, 컨트롤 생성 및 지구본 설정
     function init() {
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
@@ -62,34 +64,45 @@
       camera.position.set(2, 2, 2);
       controls.update();
 
-      // 지구본 생성: 텍스처를 입힌 구체
+      // 지구본 생성: 텍스처 적용
       const sphereGeometry = new THREE.SphereGeometry(globeRadius, 64, 64);
       const textureLoader = new THREE.TextureLoader();
-      // eo_base_2020_clean_geo.jpg 파일은 HTML 파일과 동일한 디렉토리에 두거나 적절한 경로로 수정하세요.
       const texture = textureLoader.load('eo_base_2020_clean_geo.jpg');
       const sphereMaterial = new THREE.MeshBasicMaterial({ map: texture });
       globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
       scene.add(globeMesh);
 
-      // GeoJSON 파일 (미리 변환된 정적 데이터) 불러오기
-      // ne_10m_admin_0_countries.shp를 GeoJSON으로 변환한 countries.geojson 파일을 준비하세요.
+      // GeoJSON 파일 로드 (국가 경계선)
       fetch('countries.geojson')
         .then(response => response.json())
-        .then(data => { countryGeoJSON = data; })
+        .then(data => {
+          countryGeoJSON = data;
+          drawKoreaBoundary(); // 대한민국 기본 표시
+        })
         .catch(err => console.error('GeoJSON 로드 실패:', err));
 
       animate();
     }
 
-    // 애니메이션 루프: TWEEN 업데이트와 씬 렌더링
-    function animate(time) {
-      requestAnimationFrame(animate);
-      TWEEN.update(time);
-      controls.update();
-      renderer.render(scene, camera);
+    function drawKoreaBoundary() {
+      if (!countryGeoJSON) return;
+
+      let feature = countryGeoJSON.features.find(f => f.properties.ISO_A3 === "KOR");
+      if (!feature) return;
+
+      let coordinates = feature.geometry.type === "Polygon" ? feature.geometry.coordinates[0] : feature.geometry.coordinates[0][0];
+      let points = coordinates.map(coord => latLonToXYZ(coord[1], coord[0], globeRadius + 0.005));
+
+      if (!points[0].equals(points[points.length - 1])) {
+        points.push(points[0]);
+      }
+
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color: 0x0000ff }); // 대한민국은 파란색
+      koreaBoundary = new THREE.Line(geometry, material);
+      scene.add(koreaBoundary);
     }
 
-    // 입력된 ISO_A3 코드에 해당하는 국가의 경계선을 찾아 표시하고 카메라 이동
     function updateCountryGlobe() {
       const isoCode = document.getElementById('iso-code').value.trim().toUpperCase();
       if (!isoCode) return;
@@ -107,55 +120,37 @@
         return;
       }
 
-      // ISO_A3 코드에 해당하는 국가 찾기
-      let feature = null;
-      for (const f of countryGeoJSON.features) {
-        if (f.properties.ISO_A3 === isoCode) {
-          feature = f;
-          break;
-        }
-      }
+      // 선택한 국가 찾기
+      let feature = countryGeoJSON.features.find(f => f.properties.ISO_A3 === isoCode);
       if (!feature) {
         alert("해당 국가 경계 데이터를 찾을 수 없습니다: " + isoCode);
         return;
       }
 
-      // Polygon 또는 MultiPolygon 처리 (외부 링만 사용)
-      let coordinates = [];
-      if (feature.geometry.type === "Polygon") {
-        coordinates = feature.geometry.coordinates[0];
-      } else if (feature.geometry.type === "MultiPolygon") {
-        coordinates = feature.geometry.coordinates[0][0];
-      } else {
-        alert("알 수 없는 지오메트리 타입: " + feature.geometry.type);
-        return;
-      }
+      // Polygon 또는 MultiPolygon 처리
+      let coordinates = feature.geometry.type === "Polygon" ? feature.geometry.coordinates[0] : feature.geometry.coordinates[0][0];
+      let points = coordinates.map(coord => latLonToXYZ(coord[1], coord[0], globeRadius + 0.005));
 
-      // 각 좌표를 3D 벡터로 변환
-      const points = [];
-      coordinates.forEach(coord => {
-        const lon = coord[0], lat = coord[1];
-        points.push(latLonToXYZ(lat, lon, globeRadius + 0.005));
-      });
-      // 첫 점과 마지막 점이 동일하지 않으면 닫아주기
       if (!points[0].equals(points[points.length - 1])) {
         points.push(points[0]);
       }
 
-      // 경계선을 위한 BufferGeometry와 Line 생성
+      // 대한민국(KOR)은 파란색, 그 외는 빨간색
+      const lineColor = isoCode === "KOR" ? 0x0000ff : 0xff0000;
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const material = new THREE.LineBasicMaterial({ color: 0x0000ff });
+      const material = new THREE.LineBasicMaterial({ color: lineColor });
       boundaryLine = new THREE.Line(geometry, material);
       scene.add(boundaryLine);
 
-      // 국가 경계선 중심 계산
+      // 카메라 이동 (너무 가까이 가지 않도록 2.2배 거리 유지)
       const center = new THREE.Vector3();
       points.forEach(p => center.add(p));
       center.divideScalar(points.length);
 
-      // TWEEN을 사용한 카메라 이동 애니메이션 (이동 후 OrbitControls의 타깃도 업데이트)
+      const newCameraPos = center.clone().multiplyScalar(2.2);
+
       new TWEEN.Tween(camera.position)
-        .to({ x: center.x * 2, y: center.y * 2, z: center.z * 2 }, 1000)
+        .to({ x: newCameraPos.x, y: newCameraPos.y, z: newCameraPos.z }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
         .onComplete(() => {
           controls.target.copy(center);
@@ -163,7 +158,13 @@
         .start();
     }
 
-    // 이벤트 리스너 설정
+    function animate(time) {
+      requestAnimationFrame(animate);
+      TWEEN.update(time);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
     document.getElementById('submit-btn').addEventListener('click', updateCountryGlobe);
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
