@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>인터랙티브 3D 지구본 (Three.js GitHub Pages 버전)</title>
+  <title>인터랙티브 3D 지구본 (국가명 검색 지원)</title>
   <!-- 임시로 CSP에서 unsafe-inline 허용 (운영 환경에서는 nonce나 해시 적용 권장) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <style>
@@ -12,19 +12,34 @@
       top: 10px;
       left: 10px;
       z-index: 10;
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.9);
       padding: 10px;
       border-radius: 5px;
       font-family: sans-serif;
+      max-width: 300px;
+    }
+    #results {
+      margin-top: 10px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .result-item {
+      padding: 5px;
+      border-bottom: 1px solid #ccc;
+      cursor: pointer;
+    }
+    .result-item:hover {
+      background-color: #eee;
     }
   </style>
 </head>
 <body>
   <!-- 사용자 인터페이스 -->
   <div id="overlay">
-    <label for="iso-code">ISO_A3 코드 입력 (예: USA, CHN, KOR):</label>
-    <input type="text" id="iso-code" placeholder="Enter Country Code">
-    <button id="submit-btn">국가 선택</button>
+    <label for="iso-code">국가명 검색 (예: Korea, United):</label>
+    <input type="text" id="iso-code" placeholder="국가명을 입력하세요">
+    <button id="submit-btn">검색</button>
+    <div id="results"></div>
   </div>
 
   <!-- Three.js 및 관련 모듈 로드 (로컬 파일 사용) -->
@@ -36,9 +51,14 @@
     let scene, camera, renderer, controls;
     let globeMesh;
     let koreaBoundaryLine = null;      // 대한민국 경계선 (파란색)
-    let currentBoundaryLine = null;     // 검색한 다른 국가의 경계선 (빨간색)
+    let currentBoundaryLine = null;     // 선택된 다른 국가 경계선 (빨간색)
     let countryGeoJSON = null;
     const globeRadius = 1;
+
+    // 공식 국가명을 반환하는 헬퍼 함수 (GeoJSON의 ADMIN 프로퍼티 사용)
+    function getCountryName(feature) {
+      return feature.properties.ADMIN;
+    }
 
     // 위도/경도를 3D 좌표로 변환 (지구본 좌표계)
     function latLonToXYZ(lat, lon, radius = globeRadius) {
@@ -53,7 +73,7 @@
     // 초기화: 씬, 카메라, 렌더러, OrbitControls, 지구본 생성
     function init() {
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
@@ -76,9 +96,9 @@
         .then(response => response.json())
         .then(data => {
           countryGeoJSON = data;
-          // 초기 화면 구성: "KOR" 자동 검색
-          document.getElementById('iso-code').value = "KOR";
-          updateCountryGlobe(); // 대한민국 경계선이 koreaBoundaryLine으로 설정됨
+          // 초기 화면 구성: "Korea" 자동 검색
+          document.getElementById('iso-code').value = "Korea";
+          searchCountries();
         })
         .catch(err => console.error('GeoJSON 로드 실패:', err));
 
@@ -89,7 +109,7 @@
     function animate(time) {
       requestAnimationFrame(animate);
       TWEEN.update(time);
-
+      
       // 줌인 상태에 따른 panSpeed 동적 조정
       const distance = camera.position.length();
       if (distance < 2.5) {
@@ -99,34 +119,56 @@
       } else {
         controls.panSpeed = 1.0;
       }
-
+      
       controls.update();
       renderer.render(scene, camera);
     }
 
-    // ISO_A3 코드에 해당하는 국가 경계선을 표시하고 카메라 이동
-    function updateCountryGlobe() {
-      const isoCode = document.getElementById('iso-code').value.trim().toUpperCase();
-      if (!isoCode) return;
+    // 검색어로 국가 목록을 찾고 결과를 표시
+    function searchCountries() {
+      const searchTerm = document.getElementById('iso-code').value.trim().toLowerCase();
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = ""; // 기존 결과 초기화
       
       if (!countryGeoJSON) {
         alert("GeoJSON 데이터가 아직 로드되지 않았습니다.");
         return;
       }
       
-      // ISO_A3 코드에 해당하는 국가 찾기
-      let feature = null;
-      for (const f of countryGeoJSON.features) {
-        if (f.properties.ISO_A3 === isoCode) {
-          feature = f;
-          break;
-        }
-      }
-      if (!feature) {
-        alert("해당 국가 경계 데이터를 찾을 수 없습니다: " + isoCode);
+      // 공식 국가명 (ADMIN)에서 검색어가 포함된 국가 찾기
+      const matches = countryGeoJSON.features.filter(feature => {
+        const name = getCountryName(feature).toLowerCase();
+        return name.indexOf(searchTerm) !== -1;
+      });
+      
+      if (matches.length === 0) {
+        resultsDiv.innerHTML = "<div>검색 결과가 없습니다.</div>";
         return;
       }
       
+      if (matches.length === 1) {
+        // 한 개만 있으면 바로 선택
+        displayCountry(matches[0]);
+        resultsDiv.innerHTML = ""; // 결과 목록 숨김
+      } else {
+        // 여러 개 일 경우 결과 목록 표시
+        matches.forEach(feature => {
+          const div = document.createElement('div');
+          div.className = "result-item";
+          div.textContent = getCountryName(feature) + " (" + feature.properties.ISO_A3 + ")";
+          div.addEventListener('click', () => {
+            // 클릭하면 해당 국가 선택
+            displayCountry(feature);
+            resultsDiv.innerHTML = ""; // 목록 닫기
+            document.getElementById('iso-code').value = getCountryName(feature);
+          });
+          resultsDiv.appendChild(div);
+        });
+      }
+    }
+
+    // 선택된 국가의 경계선을 그리고 카메라 이동
+    function displayCountry(feature) {
       // Polygon 또는 MultiPolygon (외부 링만 사용)
       let coordinates = [];
       if (feature.geometry.type === "Polygon") {
@@ -148,14 +190,14 @@
         points.push(points[0]);
       }
       
-      // 경계선 색상: 대한민국은 파란색, 그 외는 빨간색
+      // 경계선 색상: 만약 ISO_A3가 "KOR"이면 파란색, 아니면 빨간색
+      const isoCode = feature.properties.ISO_A3;
       const lineColor = isoCode === "KOR" ? 0x0000ff : 0xff0000;
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       const material = new THREE.LineBasicMaterial({ color: lineColor });
       const newBoundaryLine = new THREE.Line(geometry, material);
       
-      // 만약 검색한 국가가 "KOR"이면 koreaBoundaryLine 업데이트 (기존 있으면 교체)
-      // 다른 국가 검색 시에는 기존 currentBoundaryLine 제거 후 새로 추가하되, koreaBoundaryLine은 그대로 남김
+      // 대한민국 경계선은 koreaBoundaryLine에 저장, 그 외는 currentBoundaryLine에 저장
       if (isoCode === "KOR") {
         if (koreaBoundaryLine) {
           scene.remove(koreaBoundaryLine);
@@ -179,19 +221,20 @@
       points.forEach(p => center.add(p));
       center.divideScalar(points.length);
       
-      // 카메라 이동: 검색한 국가 중심의 2.2배 떨어진 위치로 이동
+      // 카메라 이동: 선택한 국가 중심의 2.2배 떨어진 위치로 이동
       const newCameraPos = center.clone().multiplyScalar(2.2);
       new TWEEN.Tween(camera.position)
         .to({ x: newCameraPos.x, y: newCameraPos.y, z: newCameraPos.z }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
         .onComplete(() => {
-          // 회전 중심은 전역 중심(0,0,0)으로 설정하여 자유로운 회전 가능
+          // 회전 중심은 (0,0,0)으로 설정하여 자유로운 회전 가능
           controls.target.set(0, 0, 0);
         })
         .start();
     }
-    
-    document.getElementById('submit-btn').addEventListener('click', updateCountryGlobe);
+
+    // 버튼 클릭 시 검색 수행
+    document.getElementById('submit-btn').addEventListener('click', searchCountries);
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
