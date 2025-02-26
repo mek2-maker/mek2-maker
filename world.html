@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <!-- GitHub의 raw 콘텐츠를 허용하도록 CSP 수정 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://raw.githubusercontent.com; script-src 'self' 'unsafe-inline' https://raw.githubusercontent.com; style-src 'self' 'unsafe-inline'">
+  <meta charset="UTF-8">
+  <title>인터랙티브 3D 지구본 (Three.js GitHub 버전)</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <!-- 사용자 인터페이스 -->
+  <div id="overlay">
+    <label for="iso-code">ISO_A3 코드 입력 (예: USA, CHN, KOR):</label>
+    <input type="text" id="iso-code" placeholder="Enter Country Code">
+    <button id="submit-btn">국가 선택</button>
+  </div>
+
+  <!-- Three.js 및 기타 라이브러리 모듈 불러오기 -->
+  <script type="module">
+    // GitHub에 업로드한 파일들의 raw URL로 import 구문 수정
+    import * as THREE from 'https://raw.githubusercontent.com/YourUserName/YourRepository/main/libs/three.module.js';
+    import { OrbitControls } from 'https://raw.githubusercontent.com/YourUserName/YourRepository/main/libs/OrbitControls.js';
+    import TWEEN from 'https://raw.githubusercontent.com/YourUserName/YourRepository/main/libs/tween.esm.js';
+
+    // 전역 변수들
+    let scene, camera, renderer, controls;
+    let globeMesh, boundaryLine;
+    let countryGeoJSON = null;
+    const globeRadius = 1;
+
+    // 위도/경도를 3D 좌표로 변환 (지구본 좌표계)
+    function latLonToXYZ(lat, lon, radius = globeRadius) {
+      const phi = (90 - lat) * (Math.PI / 180);
+      const theta = (lon + 180) * (Math.PI / 180);
+      const x = -radius * Math.sin(phi) * Math.cos(theta);
+      const z = radius * Math.sin(phi) * Math.sin(theta);
+      const y = radius * Math.cos(phi);
+      return new THREE.Vector3(x, y, z);
+    }
+
+    // 초기화 함수: 씬, 카메라, 렌더러, 컨트롤 생성 및 지구본 설정
+    function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // OrbitControls 생성
+      controls = new OrbitControls(camera, renderer.domElement);
+      camera.position.set(2, 2, 2);
+      controls.update();
+
+      // 지구본 생성: 텍스처를 입힌 구체
+      const sphereGeometry = new THREE.SphereGeometry(globeRadius, 64, 64);
+      const textureLoader = new THREE.TextureLoader();
+      // eo_base_2020_clean_geo.jpg 파일은 HTML 파일과 동일한 디렉토리에 두거나 적절한 경로로 수정하세요.
+      const texture = textureLoader.load('eo_base_2020_clean_geo.jpg');
+      const sphereMaterial = new THREE.MeshBasicMaterial({ map: texture });
+      globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      scene.add(globeMesh);
+
+      // GeoJSON 파일 (미리 변환된 정적 데이터) 불러오기
+      // ne_10m_admin_0_countries.shp를 GeoJSON으로 변환한 countries.geojson 파일을 준비하세요.
+      fetch('countries.geojson')
+        .then(response => response.json())
+        .then(data => { countryGeoJSON = data; })
+        .catch(err => console.error('GeoJSON 로드 실패:', err));
+
+      animate();
+    }
+
+    // 애니메이션 루프: TWEEN 업데이트와 씬 렌더링
+    function animate(time) {
+      requestAnimationFrame(animate);
+      TWEEN.update(time);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // 입력된 ISO_A3 코드에 해당하는 국가의 경계선을 찾아 표시하고 카메라 이동
+    function updateCountryGlobe() {
+      const isoCode = document.getElementById('iso-code').value.trim().toUpperCase();
+      if (!isoCode) return;
+
+      // 기존 경계선 제거
+      if (boundaryLine) {
+        scene.remove(boundaryLine);
+        boundaryLine.geometry.dispose();
+        boundaryLine.material.dispose();
+        boundaryLine = null;
+      }
+
+      if (!countryGeoJSON) {
+        alert("GeoJSON 데이터가 아직 로드되지 않았습니다.");
+        return;
+      }
+
+      // ISO_A3 코드에 해당하는 국가 찾기
+      let feature = null;
+      for (const f of countryGeoJSON.features) {
+        if (f.properties.ISO_A3 === isoCode) {
+          feature = f;
+          break;
+        }
+      }
+      if (!feature) {
+        alert("해당 국가 경계 데이터를 찾을 수 없습니다: " + isoCode);
+        return;
+      }
+
+      // Polygon 또는 MultiPolygon 처리 (외부 링만 사용)
+      let coordinates = [];
+      if (feature.geometry.type === "Polygon") {
+        coordinates = feature.geometry.coordinates[0];
+      } else if (feature.geometry.type === "MultiPolygon") {
+        coordinates = feature.geometry.coordinates[0][0];
+      } else {
+        alert("알 수 없는 지오메트리 타입: " + feature.geometry.type);
+        return;
+      }
+
+      // 각 좌표를 3D 벡터로 변환
+      const points = [];
+      coordinates.forEach(coord => {
+        const lon = coord[0], lat = coord[1];
+        points.push(latLonToXYZ(lat, lon, globeRadius + 0.005));
+      });
+      // 첫 점과 마지막 점이 동일하지 않으면 닫아주기
+      if (!points[0].equals(points[points.length - 1])) {
+        points.push(points[0]);
+      }
+
+      // 경계선을 위한 BufferGeometry와 Line 생성
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color: 0x0000ff });
+      boundaryLine = new THREE.Line(geometry, material);
+      scene.add(boundaryLine);
+
+      // 국가 경계선 중심 계산
+      const center = new THREE.Vector3();
+      points.forEach(p => center.add(p));
+      center.divideScalar(points.length);
+
+      // TWEEN을 사용한 카메라 이동 애니메이션 (이동 후 OrbitControls의 타깃도 업데이트)
+      new TWEEN.Tween(camera.position)
+        .to({ x: center.x * 2, y: center.y * 2, z: center.z * 2 }, 1000)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .onComplete(() => {
+          controls.target.copy(center);
+        })
+        .start();
+    }
+
+    // 이벤트 리스너 설정
+    document.getElementById('submit-btn').addEventListener('click', updateCountryGlobe);
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    window.onload = init;
+  </script>
+</body>
+</html>
