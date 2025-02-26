@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>인터랙티브 3D 지구본 (Three.js GitHub Pages 버전)</title>
-  <!-- 임시로 CSP에서 unsafe-inline 허용 (운영 환경에서는 nonce나 해시 적용 권장) -->
+  <!-- 임시 CSP: 개발 시 unsafe-inline 허용 (운영 환경에서는 nonce나 해시 사용 권장) -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <style>
     body { margin: 0; overflow: hidden; }
@@ -34,7 +34,7 @@
     import TWEEN from './libs/tween.esm.js';
 
     let scene, camera, renderer, controls;
-    let globeMesh, boundaryLine;
+    let globeMesh, koreaBoundaryLine = null, currentBoundaryLine = null;
     let countryGeoJSON = null;
     const globeRadius = 1;
 
@@ -57,6 +57,9 @@
       document.body.appendChild(renderer.domElement);
 
       controls = new OrbitControls(camera, renderer.domElement);
+      // 초기 panSpeed 설정 (추후 동적 조정됨)
+      controls.panSpeed = 1.0;
+
       camera.position.set(2, 2, 2);
       controls.update();
 
@@ -73,19 +76,31 @@
         .then(response => response.json())
         .then(data => {
           countryGeoJSON = data;
-          // 초기 화면 구성: "KOR"을 자동 검색
+          // 초기 화면 구성: "KOR" 자동 검색
           document.getElementById('iso-code').value = "KOR";
-          updateCountryGlobe();
+          updateCountryGlobe(); // 이때 대한민국 경계(koreaBoundaryLine) 설정
         })
         .catch(err => console.error('GeoJSON 로드 실패:', err));
 
       animate();
     }
 
-    // 애니메이션 루프: TWEEN, OrbitControls 업데이트 및 렌더링
+    // 애니메이션 루프: TWEEN 업데이트, OrbitControls 업데이트 및 렌더링
     function animate(time) {
       requestAnimationFrame(animate);
       TWEEN.update(time);
+
+      // 카메라와 원점(0,0,0) 사이의 거리를 계산
+      const distance = camera.position.length();
+      // 줌인(거리 작음)일 때 panSpeed를 낮게, 줌아웃(거리 큼)일 때는 기본값을 사용
+      if (distance < 2.5) {
+        controls.panSpeed = 0.3;
+      } else if (distance < 4) {
+        controls.panSpeed = 0.6;
+      } else {
+        controls.panSpeed = 1.0;
+      }
+
       controls.update();
       renderer.render(scene, camera);
     }
@@ -94,14 +109,6 @@
     function updateCountryGlobe() {
       const isoCode = document.getElementById('iso-code').value.trim().toUpperCase();
       if (!isoCode) return;
-
-      // 기존 경계선 제거
-      if (boundaryLine) {
-        scene.remove(boundaryLine);
-        boundaryLine.geometry.dispose();
-        boundaryLine.material.dispose();
-        boundaryLine = null;
-      }
 
       if (!countryGeoJSON) {
         alert("GeoJSON 데이터가 아직 로드되지 않았습니다.");
@@ -146,15 +153,33 @@
       const lineColor = isoCode === "KOR" ? 0x0000ff : 0xff0000;
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       const material = new THREE.LineBasicMaterial({ color: lineColor });
-      boundaryLine = new THREE.Line(geometry, material);
-      scene.add(boundaryLine);
+      const newBoundaryLine = new THREE.Line(geometry, material);
+
+      // 대한민국 경계선은 따로 보존하고, 다른 국가 검색 시 기존 검색 경계선은 제거
+      if (isoCode === "KOR") {
+        if (koreaBoundaryLine) {
+          scene.remove(koreaBoundaryLine);
+          koreaBoundaryLine.geometry.dispose();
+          koreaBoundaryLine.material.dispose();
+        }
+        koreaBoundaryLine = newBoundaryLine;
+        scene.add(koreaBoundaryLine);
+      } else {
+        if (currentBoundaryLine) {
+          scene.remove(currentBoundaryLine);
+          currentBoundaryLine.geometry.dispose();
+          currentBoundaryLine.material.dispose();
+        }
+        currentBoundaryLine = newBoundaryLine;
+        scene.add(currentBoundaryLine);
+      }
 
       // 국가 중심 계산
       const center = new THREE.Vector3();
       points.forEach(p => center.add(p));
       center.divideScalar(points.length);
 
-      // 카메라 이동: 대상 중심의 2.2배 떨어진 위치로 이동
+      // 카메라 이동: 검색한 국가 중심의 2.2배 떨어진 위치로 이동
       const newCameraPos = center.clone().multiplyScalar(2.2);
       new TWEEN.Tween(camera.position)
         .to({ x: newCameraPos.x, y: newCameraPos.y, z: newCameraPos.z }, 1000)
