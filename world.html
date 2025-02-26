@@ -86,7 +86,7 @@
       // 텍스처를 입힌 지구본 생성
       const sphereGeometry = new THREE.SphereGeometry(globeRadius, 64, 64);
       const textureLoader = new THREE.TextureLoader();
-      const texture = textureLoader.load('eo_base_2020_clean_geo.jpg');
+      const texture = textureLoader.load('eo_base_2020_clean_geo_optimized.jpg');
       const sphereMaterial = new THREE.MeshBasicMaterial({ map: texture });
       globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
       scene.add(globeMesh);
@@ -124,7 +124,7 @@
       renderer.render(scene, camera);
     }
 
-    // 검색어를 기반으로 국가 목록을 찾아 결과를 표시
+    // 검색어를 기반으로 국가 목록을 찾아 결과를 표시 (대소문자 구분 없이)
     function searchCountries() {
       const searchTerm = document.getElementById('iso-code').value.trim().toLowerCase();
       const resultsDiv = document.getElementById('results');
@@ -135,7 +135,7 @@
         return;
       }
       
-      // 공식 국가명(ADMIN)에서 검색어가 포함된 국가 찾기 (부분 검색)
+      // 공식 국가명(ADMIN)을 소문자로 변환하여 부분 검색
       const matches = countryGeoJSON.features.filter(feature => {
         const name = getCountryName(feature).toLowerCase();
         return name.indexOf(searchTerm) !== -1;
@@ -152,9 +152,9 @@
         div.className = "result-item";
         div.textContent = getCountryName(feature) + " (" + feature.properties.ISO_A3 + ")";
         div.addEventListener('click', () => {
-          // 클릭 시 해당 국가 선택 후 경계선 표시
+          // 클릭하면 해당 국가 선택 후 경계선 표시
           displayCountry(feature);
-          resultsDiv.innerHTML = ""; // 목록 닫기
+          resultsDiv.innerHTML = ""; // 결과 목록 숨김
           document.getElementById('iso-code').value = getCountryName(feature);
         });
         resultsDiv.appendChild(div);
@@ -191,7 +191,7 @@
       const material = new THREE.LineBasicMaterial({ color: lineColor });
       const newBoundaryLine = new THREE.Line(geometry, material);
       
-      // 대한민국 경계선은 koreaBoundaryLine에 저장, 나머지는 currentBoundaryLine에 저장
+      // 대한민국 경계선은 koreaBoundaryLine에 저장, 그 외는 currentBoundaryLine에 저장
       if (isoCode === "KOR") {
         if (koreaBoundaryLine) {
           scene.remove(koreaBoundaryLine);
@@ -227,7 +227,6 @@
         .start();
     }
 
-    // 버튼 클릭 시 검색 수행
     document.getElementById('submit-btn').addEventListener('click', searchCountries);
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
