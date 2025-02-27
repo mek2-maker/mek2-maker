@@ -110,6 +110,21 @@
       return new THREE.Vector3(x, y, z);
     }
 
+
+    function removeOldFlagPlane() {
+      if (currentFlagMesh) {
+        scene.remove(currentFlagMesh);
+        currentFlagMesh.traverse(obj => {
+          if (obj.isMesh) {
+            obj.geometry.dispose();
+            if (obj.material.map) obj.material.map.dispose();
+            obj.material.dispose();
+          }
+        });
+        currentFlagMesh = null;
+      }
+    }
+    
     // ---------------------------
     // 국기 평면 생성 함수 (바운딩박스 기반)
     // ---------------------------
