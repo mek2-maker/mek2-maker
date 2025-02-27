@@ -223,7 +223,12 @@
 
     // ringToVector2: 각 정점에서 centerLon, centerLat를 빼서 로컬 2D 좌표를 만듭니다.
     function ringToVector2(ring, centerLon, centerLat) {
-      const pts = ring.map(([lon, lat]) => new THREE.Vector2(lon - centerLon, lat - centerLat));
+      const degToRad = Math.PI / 180;
+      const pts = ring.map(([lon, lat]) => {
+        const dx = (lon - centerLon) * degToRad;
+        const dy = (lat - centerLat) * degToRad;
+        return new THREE.Vector2(dx, dy);
+      });
       if (pts.length > 1 && pts[0].equals(pts[pts.length - 1])) {
         pts.pop();
       }
