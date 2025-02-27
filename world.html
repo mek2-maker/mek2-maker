@@ -133,20 +133,34 @@
     // 국기 Shape 생성 (경계선 ShapeGeometry 기반)
     // ---------------------------
     async function createFlagShape(feature, iso2) {
+      console.log("createFlagShape: 시작", feature, iso2);
+    
       const { minLon, maxLon, minLat, maxLat, centerPos } = getBoundsCenter(feature);
+      console.log("createFlagShape: 경계 box", { minLon, maxLon, minLat, maxLat, centerPos });
+    
       const shapeGroup = new THREE.Group();
       const geom = feature.geometry;
+    
       if (geom.type === 'Polygon') {
         const mesh = polygonToShapeMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat });
-        if (mesh) shapeGroup.add(mesh);
+        if (mesh) {
+          shapeGroup.add(mesh);
+          console.log("createFlagShape: Polygon mesh 추가");
+        }
       } else if (geom.type === 'MultiPolygon') {
         geom.coordinates.forEach(coordsArray => {
           const mesh = polygonToShapeMesh(coordsArray, { minLon, maxLon, minLat, maxLat });
-          if (mesh) shapeGroup.add(mesh);
+          if (mesh) {
+            shapeGroup.add(mesh);
+            console.log("createFlagShape: MultiPolygon mesh 추가");
+          }
         });
       }
-      // 국기 텍스처 로드 및 재질 적용
+    
+      // 국기 텍스처 로드
       const flagTex = await loadFlagTexture(iso2);
+      console.log("createFlagShape: flagTex 로드 완료", flagTex);
+    
       shapeGroup.traverse(obj => {
         if (obj.isMesh) {
           obj.material.map = flagTex;
@@ -156,7 +170,7 @@
           obj.material.needsUpdate = true;
         }
       });
-      // shapeGroup 배치: 중심에 위치시키고, 구의 접평면 회전 적용
+    
       shapeGroup.position.copy(centerPos);
       const normal = centerPos.clone().normalize();
       let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
@@ -168,6 +182,8 @@
       const basis = new THREE.Matrix4();
       basis.makeBasis(tangent, bitangent, normal);
       shapeGroup.setRotationFromMatrix(basis);
+    
+      console.log("createFlagShape: 최종 shapeGroup", shapeGroup);
       return shapeGroup;
     }
 
