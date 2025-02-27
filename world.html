@@ -366,8 +366,11 @@
     // ---------------------------
     // 국기 평면 생성 (바운딩박스 기반)
     // ---------------------------
+
     function createFlagPlane(feature, iso2) {
+  // feature.geometry가 Polygon 또는 MultiPolygon일 경우 모든 좌표를 순회하여 바운딩박스를 구함
       let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      
       if (feature.geometry.type === 'Polygon') {
         feature.geometry.coordinates.forEach(ring => {
           ring.forEach(([lon, lat]) => {
@@ -389,13 +392,19 @@
           });
         });
       }
+    
+      // 중심 (중앙 좌표)
       const centerLon = (minLon + maxLon) / 2;
       const centerLat = (minLat + maxLat) / 2;
-      // width, height를 (최대 - 최소) 각도를 라디안으로 변환하여 구함.
+      
+      // 경도, 위도 차이를 라디안으로 변환하고, 구의 반지름(=1)을 곱해 평면 크기로 변환
       const width = globeRadius * ((maxLon - minLon) * Math.PI / 180);
       const height = globeRadius * ((maxLat - minLat) * Math.PI / 180);
-
+    
+      // PlaneGeometry 생성
       const planeGeo = new THREE.PlaneGeometry(width, height);
+      
+      // 국기 텍스처를 로드한 후, 재질과 Mesh 생성 (투명도 60%)
       return loadFlagTexture(iso2).then(flagTexture => {
         const material = new THREE.MeshBasicMaterial({
           map: flagTexture,
@@ -404,11 +413,12 @@
           opacity: 0.6
         });
         const plane = new THREE.Mesh(planeGeo, material);
-        // 중앙 3D 좌표 (구 표면에서 약간 띄움)
+    
+        // 평면의 위치: 해당 국가의 중심에 배치 (구 표면에서 약간 띄워서)
         const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.002);
         plane.position.copy(centerPos);
-
-        // 접평면으로 회전: 중심의 법선은 centerPos 정규화 벡터
+    
+        // 평면을 구의 접평면에 맞게 회전시키기
         const normal = centerPos.clone().normalize();
         let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
         if (tangent.length() < 0.0001) {
@@ -419,23 +429,9 @@
         const basis = new THREE.Matrix4();
         basis.makeBasis(tangent, bitangent, normal);
         plane.setRotationFromMatrix(basis);
-
+    
         return plane;
       });
-    }
-
-    function removeOldFlagPlane() {
-      if (currentFlagMesh) {
-        scene.remove(currentFlagMesh);
-        currentFlagMesh.traverse(obj => {
-          if (obj.isMesh) {
-            obj.geometry.dispose();
-            if (obj.material.map) obj.material.map.dispose();
-            obj.material.dispose();
-          }
-        });
-        currentFlagMesh = null;
-      }
     }
 
     // ---------------------------
