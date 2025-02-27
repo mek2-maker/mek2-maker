@@ -61,7 +61,7 @@
     let currentBoundaryLine = null; // 검색 국가 경계선
     let koreaBoundaryLine = null;   // South Korea 경계선은 계속 유지
 
-    // 헬퍼 함수
+    // 헬퍼 함수들
     function getISO2(feature) {
       const iso2 = feature.properties.ISO_A2;
       return iso2 ? iso2.trim() : null;
@@ -76,6 +76,39 @@
       const z = radius * Math.sin(phi) * Math.sin(theta);
       const y = radius * Math.cos(phi);
       return new THREE.Vector3(x, y, z);
+    }
+
+    // 국기 텍스처 로드 함수 (누락된 부분 추가)
+    function loadFlagTexture(iso2) {
+      return new Promise((resolve, reject) => {
+        if (iso2 === "??") {
+          return reject("ISO2 코드가 없어 국기 이미지를 찾을 수 없음");
+        }
+        const exts = ['gif','png','jpg','bmp'];
+        const basePath = './flag/';
+        const loader = new THREE.TextureLoader();
+        function tryLoad(i) {
+          if (i >= exts.length) {
+            reject(`모든 확장자를 시도했으나 '${iso2}' 국기 파일 없음`);
+            return;
+          }
+          const url = `${basePath}${iso2}.${exts[i]}`;
+          console.log("Trying to load:", url);
+          loader.load(
+            url,
+            texture => {
+              console.log("Loaded flag texture:", url);
+              resolve(texture);
+            },
+            undefined,
+            () => {
+              console.warn("Failed to load:", url);
+              tryLoad(i+1);
+            }
+          );
+        }
+        tryLoad(0);
+      });
     }
 
     // 헬퍼 함수: 기존 국기 Mesh 제거
@@ -100,9 +133,7 @@
     // 국기 Shape 생성 (경계선 ShapeGeometry 기반)
     // ---------------------------
     async function createFlagShape(feature, iso2) {
-      // 바운딩박스 및 중심 계산
       const { minLon, maxLon, minLat, maxLat, centerPos } = getBoundsCenter(feature);
-
       const shapeGroup = new THREE.Group();
       const geom = feature.geometry;
       if (geom.type === 'Polygon') {
@@ -114,7 +145,6 @@
           if (mesh) shapeGroup.add(mesh);
         });
       }
-
       // 국기 텍스처 로드 및 재질 적용
       const flagTex = await loadFlagTexture(iso2);
       shapeGroup.traverse(obj => {
@@ -126,7 +156,6 @@
           obj.material.needsUpdate = true;
         }
       });
-
       // shapeGroup 배치: 중심에 위치시키고, 구의 접평면 회전 적용
       shapeGroup.position.copy(centerPos);
       const normal = centerPos.clone().normalize();
@@ -139,7 +168,6 @@
       const basis = new THREE.Matrix4();
       basis.makeBasis(tangent, bitangent, normal);
       shapeGroup.setRotationFromMatrix(basis);
-
       return shapeGroup;
     }
 
@@ -148,7 +176,6 @@
       if (!coordsArray || coordsArray.length === 0) return null;
       const outerRing = coordsArray[0];
       if (!outerRing || outerRing.length < 3) return null;
-
       const shape = new THREE.Shape(ringToVector2(outerRing));
       for (let i = 1; i < coordsArray.length; i++) {
         const holeRing = coordsArray[i];
@@ -156,7 +183,6 @@
         const holePath = new THREE.Path(ringToVector2(holeRing));
         shape.holes.push(holePath);
       }
-
       const shapeGeom = new THREE.ShapeGeometry(shape);
       const posAttr = shapeGeom.getAttribute('position');
       const uvArray = [];
@@ -271,6 +297,8 @@
         return;
       }
       if (matches.length === 1) {
+        // 단일 검색 결과인 경우, 검색창에 해당 국가의 풀네임을 입력합니다.
+        document.getElementById('iso-code').value = getCountryName(matches[0]);
         displayCountry(matches[0]);
         resultsDiv.innerHTML = "";
       } else {
@@ -314,14 +342,12 @@
     function drawCountryBoundary(feature) {
       const isoA3 = feature.properties.ISO_A3;
       const lineColor = (isoA3 === "KOR") ? 0x0000ff : 0xff0000;
-      // South Korea 경계선은 항상 남김
       if (isoA3 !== "KOR" && currentBoundaryLine) {
         scene.remove(currentBoundaryLine);
         disposeObject(currentBoundaryLine);
         currentBoundaryLine = null;
       }
       if (isoA3 === "KOR") {
-        // South Korea 경계선 생성 후 scene에 추가하고, 제거하지 않음
         if (!koreaBoundaryLine) {
           koreaBoundaryLine = createBoundaryLineGroup(feature);
           scene.add(koreaBoundaryLine);
@@ -363,8 +389,6 @@
       const material = new THREE.LineBasicMaterial({ color });
       return new THREE.Line(geometry, material);
     }
-
-    // 위에서 이미 선언된 removeOldFlagMesh 함수 사용 (중복 선언 제거됨)
 
     window.onload = init;
     document.getElementById('searchBtn').addEventListener('click', searchCountries);
