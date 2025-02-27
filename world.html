@@ -116,7 +116,7 @@
       document.body.appendChild(renderer.domElement);
 
       controls = new OrbitControls(camera, renderer.domElement);
-      controls.panSpeed = 1.0;
+      controls.panSpeed = 0.5;
       controls.update();
 
       // 지구본(구)에 텍스처 입힘
@@ -133,7 +133,7 @@
         .then(data => {
           countryGeoJSON = data;
           // 초기 검색 (예: Korea)
-          document.getElementById('iso-code').value = "Korea";
+          document.getElementById('iso-code').value = "South Korea";
           searchCountries();
         })
         .catch(err => console.error('GeoJSON 로드 실패:', err));
