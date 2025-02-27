@@ -361,18 +361,19 @@
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       const material = new THREE.LineBasicMaterial({ color });
       return new THREE.Line(geometry, material);
+    }  // <-- 추가된 닫는 중괄호
     
-      // ---------------------------
-      // 이벤트 바인딩
-      // ---------------------------
-      document.getElementById('submit-btn').addEventListener('click', searchCountries);
-      window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
+    // ---------------------------
+    // 이벤트 바인딩
+    // ---------------------------
+    document.getElementById('submit-btn').addEventListener('click', searchCountries);
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
     
-      window.onload = init;
+    window.onload = init;
   </script>
 </body>
 </html>
