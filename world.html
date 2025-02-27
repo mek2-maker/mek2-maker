@@ -232,7 +232,7 @@
       }
       const centerLon = (minLon + maxLon) / 2;
       const centerLat = (minLat + maxLat) / 2;
-      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.005);
+      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.02);
       return { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos };
     }
 
@@ -384,7 +384,7 @@
       if (!ring[0].every((val, idx) => val === ring[ring.length - 1][idx])) {
         ring.push(ring[0]);
       }
-      const points = ring.map(([lon, lat]) => lonLatToXYZ(lon, lat, globeRadius + 0.005));
+      const points = ring.map(([lon, lat]) => lonLatToXYZ(lon, lat, globeRadius + 0.02));
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       const material = new THREE.LineBasicMaterial({ color });
       return new THREE.Line(geometry, material);
