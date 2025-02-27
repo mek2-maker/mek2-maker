@@ -116,7 +116,10 @@
       document.body.appendChild(renderer.domElement);
 
       controls = new OrbitControls(camera, renderer.domElement);
-      controls.panSpeed = 0.5;
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.rotateSpeed = 0.5;
+      controls.zoomSpeed   = 1.2;
+      controls.panSpeed    = 1;  // 필요에 따라 값을 조정하세요.
       controls.update();
 
       // 지구본(구)에 텍스처 입힘
