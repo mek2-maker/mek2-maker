@@ -78,7 +78,7 @@
       return new THREE.Vector3(x, y, z);
     }
 
-    // 국기 텍스처 로드 함수 (누락된 부분 추가)
+    // 국기 텍스처 로드 함수
     function loadFlagTexture(iso2) {
       return new Promise((resolve, reject) => {
         if (iso2 === "??") {
@@ -135,21 +135,22 @@
     async function createFlagShape(feature, iso2) {
       console.log("createFlagShape: 시작", feature, iso2);
     
-      const { minLon, maxLon, minLat, maxLat, centerPos } = getBoundsCenter(feature);
-      console.log("createFlagShape: 경계 box", { minLon, maxLon, minLat, maxLat, centerPos });
+      // 바운딩박스와 중심 좌표 계산 (centerLon, centerLat, centerPos 포함)
+      const { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos } = getBoundsCenter(feature);
+      console.log("createFlagShape: 경계 box", { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos });
     
       const shapeGroup = new THREE.Group();
       const geom = feature.geometry;
     
       if (geom.type === 'Polygon') {
-        const mesh = polygonToShapeMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat });
+        const mesh = polygonToShapeMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat, centerLon, centerLat });
         if (mesh) {
           shapeGroup.add(mesh);
           console.log("createFlagShape: Polygon mesh 추가");
         }
       } else if (geom.type === 'MultiPolygon') {
         geom.coordinates.forEach(coordsArray => {
-          const mesh = polygonToShapeMesh(coordsArray, { minLon, maxLon, minLat, maxLat });
+          const mesh = polygonToShapeMesh(coordsArray, { minLon, maxLon, minLat, maxLat, centerLon, centerLat });
           if (mesh) {
             shapeGroup.add(mesh);
             console.log("createFlagShape: MultiPolygon mesh 추가");
@@ -171,6 +172,8 @@
         }
       });
     
+      // shapeGroup는 로컬 좌표(국가 중심을 원점)로 만들어졌으므로,
+      // 전체를 실제 구 표면상의 위치(centerPos)로 이동
       shapeGroup.position.copy(centerPos);
       const normal = centerPos.clone().normalize();
       let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
@@ -188,15 +191,18 @@
     }
 
     // polygonToShapeMesh: coordsArray → ShapeGeometry Mesh
-    function polygonToShapeMesh(coordsArray, { minLon, maxLon, minLat, maxLat }) {
+    // 옵션에 centerLon, centerLat를 포함하여 각 정점에서 빼줌
+    function polygonToShapeMesh(coordsArray, { minLon, maxLon, minLat, maxLat, centerLon, centerLat }) {
       if (!coordsArray || coordsArray.length === 0) return null;
       const outerRing = coordsArray[0];
       if (!outerRing || outerRing.length < 3) return null;
-      const shape = new THREE.Shape(ringToVector2(outerRing));
+      
+      // 로컬 좌표 (각 정점에서 중심을 뺌)
+      const shape = new THREE.Shape(ringToVector2(outerRing, centerLon, centerLat));
       for (let i = 1; i < coordsArray.length; i++) {
         const holeRing = coordsArray[i];
         if (!holeRing || holeRing.length < 3) continue;
-        const holePath = new THREE.Path(ringToVector2(holeRing));
+        const holePath = new THREE.Path(ringToVector2(holeRing, centerLon, centerLat));
         shape.holes.push(holePath);
       }
       const shapeGeom = new THREE.ShapeGeometry(shape);
@@ -205,6 +211,8 @@
       for (let i = 0; i < posAttr.count; i++) {
         const lon = posAttr.getX(i);
         const lat = posAttr.getY(i);
+        // UV 좌표는 원래 좌표계 기준이지만,
+        // 여기서는 단순히 min, max 범위로 보정합니다.
         const u = (lon - minLon) / (maxLon - minLon);
         const v = (lat - minLat) / (maxLat - minLat);
         uvArray.push(u, v);
@@ -213,15 +221,16 @@
       return new THREE.Mesh(shapeGeom, new THREE.MeshBasicMaterial({ color: 0xffffff }));
     }
 
-    function ringToVector2(ring) {
-      const pts = ring.map(([lon, lat]) => new THREE.Vector2(lon, lat));
+    // ringToVector2: 각 정점에서 centerLon, centerLat를 빼서 로컬 2D 좌표를 만듭니다.
+    function ringToVector2(ring, centerLon, centerLat) {
+      const pts = ring.map(([lon, lat]) => new THREE.Vector2(lon - centerLon, lat - centerLat));
       if (pts.length > 1 && pts[0].equals(pts[pts.length - 1])) {
         pts.pop();
       }
       return pts;
     }
 
-    // getBoundsCenter: 바운딩박스와 중심 3D 좌표 계산
+    // getBoundsCenter: 바운딩박스와 중심 3D 좌표 계산 (centerLon, centerLat, centerPos 포함)
     function getBoundsCenter(feature) {
       let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
       const geom = feature.geometry;
@@ -257,7 +266,7 @@
     // ---------------------------
     function init() {
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.set(2, 2, 2);
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -357,7 +366,7 @@
       new TWEEN.Tween(camera.position)
         .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
-        .onComplete(() => { controls.target.set(0,0,0); })
+        .onComplete(() => { controls.target.set(0, 0, 0); })
         .start();
     }
 
