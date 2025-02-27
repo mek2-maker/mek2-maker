@@ -357,11 +357,7 @@
       new TWEEN.Tween(camera.position)
         .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
-        .onComplete(() => {
-          controls.target.copy(centerPos);
-          controls.update();
-          console.log("카메라 이동 후:", camera.position, controls.target);
-        })
+        .onComplete(() => { controls.target.set(0,0,0); })
         .start();
     }
 
