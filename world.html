@@ -192,7 +192,7 @@
         .then(data => {
           countryGeoJSON = data;
           // 초기 검색어 예시: "China" 또는 "South Korea"
-          document.getElementById('iso-code').value = "China";
+          document.getElementById('iso-code').value = "south korea";
           searchCountries();
         })
         .catch(err => console.error('GeoJSON 로드 실패:', err));
@@ -361,18 +361,18 @@
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       const material = new THREE.LineBasicMaterial({ color });
       return new THREE.Line(geometry, material);
-
-    // ---------------------------
-    // 이벤트 바인딩
-    // ---------------------------
-    document.getElementById('submit-btn').addEventListener('click', searchCountries);
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    window.onload = init;
+    
+      // ---------------------------
+      // 이벤트 바인딩
+      // ---------------------------
+      document.getElementById('submit-btn').addEventListener('click', searchCountries);
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    
+      window.onload = init;
   </script>
 </body>
 </html>
