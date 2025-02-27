@@ -335,12 +335,21 @@
 
     function displayCountry(feature) {
       drawCountryBoundary(feature);
+    
       const iso2 = getISO2(feature) || "??";
       createFlagShape(feature, iso2)
         .then(flagShape => {
+          console.log("displayCountry: 국기 shape 생성 성공", flagShape);
+    
           removeOldFlagMesh();
           currentFlagMesh = flagShape;
           scene.add(currentFlagMesh);
+    
+          // === 디버그용 박스 헬퍼 추가 ===
+          const boxHelper = new THREE.BoxHelper(currentFlagMesh, 0xff00ff);
+          scene.add(boxHelper);
+          console.log("BoxHelper added to scene for debugging.");
+    
         })
         .catch(err => console.warn("국기 Shape 생성 실패:", err));
 
@@ -348,7 +357,11 @@
       new TWEEN.Tween(camera.position)
         .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
-        .onComplete(() => { controls.target.set(0,0,0); })
+        .onComplete(() => {
+          controls.target.copy(centerPos);
+          controls.update();
+          console.log("카메라 이동 후:", camera.position, controls.target);
+        })
         .start();
     }
 
