@@ -2,24 +2,38 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>경계선 내부 국기 표시 + South Korea 경계선 유지</title>
+  <title>3D 지구본 (경계선 내부 국기 표시, South Korea 경계 유지)</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <style>
     body { margin: 0; overflow: hidden; }
     #overlay {
       position: absolute;
-      top: 10px; left: 10px; z-index: 10;
-      background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px;
-      font-family: sans-serif; width: 300px; max-width: 80vw; box-sizing: border-box;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(255,255,255,0.9);
+      padding: 10px;
+      border-radius: 5px;
+      font-family: sans-serif;
+      width: 300px;
+      max-width: 80vw;
+      box-sizing: border-box;
     }
     #results {
-      margin-top: 10px; max-height: 150px; overflow-y: auto;
+      margin-top: 10px;
+      max-height: 150px;
+      overflow-y: auto;
     }
     .result-item {
-      padding: 5px; border-bottom: 1px solid #ccc; cursor: pointer;
+      padding: 5px;
+      border-bottom: 1px solid #ccc;
+      cursor: pointer;
     }
     .result-item:hover { background-color: #eee; }
     #overlay input[type="text"] {
-      width: 100%; box-sizing: border-box; margin-bottom: 5px;
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 5px;
     }
   </style>
 </head>
@@ -35,21 +49,19 @@
     import * as THREE from './libs/three.module.js';
     import { OrbitControls } from './libs/OrbitControls.js';
     import TWEEN from './libs/tween.esm.js';
-    import earcut from './libs/earcut.js'; // ShapeGeometry에 사용
-    
+    import earcut from './libs/earcut.js';
+
     let scene, camera, renderer, controls;
     const globeRadius = 1;
     let globeMesh;
     let countryGeoJSON = null;
-    
-    // 경계선 & 국기 Mesh
-    let currentBoundaryLine = null; // 현재 검색 국가 경계
-    let currentFlagMesh = null;     // 현재 검색 국가 국기
-    let koreaBoundaryLine = null;   // South Korea 경계 (항상 유지)
-    
-    // ---------------------------
-    // 1) 기초 함수들
-    // ---------------------------
+
+    // Mesh 보관
+    let currentFlagMesh = null;     // 검색 국가 국기 Shape
+    let currentBoundaryLine = null; // 검색 국가 경계선
+    let koreaBoundaryLine = null;   // South Korea 경계선은 계속 유지
+
+    // 헬퍼 함수
     function getISO2(feature) {
       const iso2 = feature.properties.ISO_A2;
       return iso2 ? iso2.trim() : null;
@@ -57,238 +69,89 @@
     function getCountryName(feature) {
       return feature.properties.ADMIN;
     }
-    function lonLatToXYZ(lon, lat, radius=globeRadius) {
+    function lonLatToXYZ(lon, lat, radius = globeRadius) {
       const phi = (90 - lat) * (Math.PI/180);
       const theta = (lon + 180) * (Math.PI/180);
       const x = -radius * Math.sin(phi) * Math.cos(theta);
-      const z =  radius * Math.sin(phi) * Math.sin(theta);
-      const y =  radius * Math.cos(phi);
-      return new THREE.Vector3(x,y,z);
+      const z = radius * Math.sin(phi) * Math.sin(theta);
+      const y = radius * Math.cos(phi);
+      return new THREE.Vector3(x, y, z);
     }
-    
-    // 국기 텍스처 로드
+
+    // 디버깅 로그 포함한 국기 텍스처 로드
     function loadFlagTexture(iso2) {
       return new Promise((resolve, reject) => {
-        if (iso2==="??") {
+        if (iso2 === "??") {
           return reject("ISO2 코드가 없어 국기 이미지를 찾을 수 없음");
         }
         const exts = ['gif','png','jpg','bmp'];
         const basePath = './flag/';
         const loader = new THREE.TextureLoader();
         function tryLoad(i) {
-          if(i>=exts.length) {
+          if (i >= exts.length) {
             reject(`모든 확장자를 시도했으나 '${iso2}' 국기 파일 없음`);
             return;
           }
           const url = `${basePath}${iso2}.${exts[i]}`;
+          console.log("Trying to load:", url);
           loader.load(
             url,
-            tex => resolve(tex),
+            texture => {
+              console.log("Loaded flag texture:", url);
+              resolve(texture);
+            },
             undefined,
-            () => tryLoad(i+1)
+            () => {
+              console.warn("Failed to load:", url);
+              tryLoad(i+1);
+            }
           );
         }
         tryLoad(0);
       });
     }
-    
-    // ---------------------------
-    // 2) Scene 초기화
-    // ---------------------------
-    function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1,1000);
-      camera.position.set(2,2,2);
-    
-      renderer = new THREE.WebGLRenderer({antialias:true});
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
-    
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.update();
-    
-      // 지구본(배경)
-      const sphereGeom = new THREE.SphereGeometry(globeRadius,64,64);
-      const texLoader = new THREE.TextureLoader();
-      const globeTex = texLoader.load('eo_base_2020_clean_geo_optimized.jpg');
-      const sphereMat = new THREE.MeshBasicMaterial({ map: globeTex });
-      globeMesh = new THREE.Mesh(sphereGeom, sphereMat);
-      scene.add(globeMesh);
-    
-      // GeoJSON 로드
-      fetch('countries.geojson')
-        .then(r=>r.json())
-        .then(data=>{
-          countryGeoJSON = data;
-          document.getElementById('iso-code').value = "south korea";
-          searchCountries(); // 초기 검색
-        })
-        .catch(err=>console.error("GeoJSON 로드 실패:",err));
-    
-      animate();
-    }
-    
-    function animate(time) {
-      requestAnimationFrame(animate);
-      TWEEN.update(time);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    
-    // ---------------------------
-    // 3) 검색 & 국가 표시
-    // ---------------------------
-    function searchCountries() {
-      const term = document.getElementById('iso-code').value.trim().toLowerCase();
-      const resultsDiv = document.getElementById('results');
-      resultsDiv.innerHTML = "";
-    
-      if(!countryGeoJSON) {
-        alert("GeoJSON 데이터가 아직 로드되지 않았습니다.");
-        return;
-      }
-    
-      const matches = countryGeoJSON.features.filter(f => {
-        return getCountryName(f).toLowerCase().includes(term);
-      });
-    
-      if(matches.length===0) {
-        resultsDiv.innerHTML = "<div>검색 결과가 없습니다.</div>";
-        return;
-      }
-      if(matches.length===1) {
-        displayCountry(matches[0]);
-        resultsDiv.innerHTML="";
-      } else {
-        matches.forEach(feature => {
-          const div = document.createElement('div');
-          div.className="result-item";
-          const iso2 = getISO2(feature) || "??";
-          div.textContent = `${getCountryName(feature)} (${iso2})`;
-          div.addEventListener('click',()=>{
-            displayCountry(feature);
-            resultsDiv.innerHTML="";
-            document.getElementById('iso-code').value = getCountryName(feature);
-          });
-          resultsDiv.appendChild(div);
-        });
+
+    // 기존 국기 Mesh 제거
+    function removeOldFlagMesh() {
+      if (currentFlagMesh) {
+        scene.remove(currentFlagMesh);
+        disposeObject(currentFlagMesh);
+        currentFlagMesh = null;
       }
     }
-    
-    // 국가 표시
-    function displayCountry(feature) {
-      // 1) 경계선 표시
-      drawBoundaryLine(feature);
-    
-      // 2) 국기(ShapeGeometry) 표시
-      const iso2 = getISO2(feature) || "??";
-      createFlagShape(feature, iso2)
-        .then(shapeMesh=>{
-          removeOldFlagMesh();
-          currentFlagMesh = shapeMesh;
-          scene.add(currentFlagMesh);
-        })
-        .catch(err=>console.warn("국기 Shape 생성 실패:", err));
-    
-      // 3) 카메라 이동
-      const {centerPos} = getBoundsCenter(feature);
-      new TWEEN.Tween(camera.position)
-        .to({ x:centerPos.x*2.2, y:centerPos.y*2.2, z:centerPos.z*2.2 }, 1000)
-        .easing(TWEEN.Easing.Quadratic.Out)
-        .onComplete(()=>{
-          controls.target.set(0,0,0);
-        })
-        .start();
-    }
-    
-    // ---------------------------
-    // 4) 경계선(Line) 표시
-    // ---------------------------
-    
-    // South Korea(KOR)는 항상 유지, 다른 나라는 currentBoundaryLine 사용
-    function drawBoundaryLine(feature) {
-      const isoA3 = feature.properties.ISO_A3;
-      if(isoA3==="KOR") {
-        // 만약 이미 koreaBoundaryLine이 없으면 새로 생성
-        if(!koreaBoundaryLine) {
-          const lineGroup = createBoundaryLineGroup(feature);
-          koreaBoundaryLine = lineGroup;
-          scene.add(koreaBoundaryLine);
+    function disposeObject(obj) {
+      obj.traverse(child => {
+        if (child.isMesh) {
+          child.geometry.dispose();
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
         }
-        return;
-      }
-      // 그 외 국가는 currentBoundaryLine로 관리
-      if(currentBoundaryLine) {
-        scene.remove(currentBoundaryLine);
-        disposeObject(currentBoundaryLine);
-        currentBoundaryLine = null;
-      }
-      currentBoundaryLine = createBoundaryLineGroup(feature);
-      scene.add(currentBoundaryLine);
+      });
     }
-    
-    function createBoundaryLineGroup(feature) {
-      const lineGroup = new THREE.Group();
-      const geom = feature.geometry;
-      if(!geom) return lineGroup;
-    
-      // 임의 색상 (빨강)
-      const lineColor = 0xff0000;
-    
-      if(geom.type==='Polygon') {
-        geom.coordinates.forEach(ring=>{
-          const lineMesh = createBoundaryLineMesh(ring, lineColor);
-          if(lineMesh) lineGroup.add(lineMesh);
-        });
-      } else if(geom.type==='MultiPolygon') {
-        geom.coordinates.forEach(poly=>{
-          poly.forEach(ring=>{
-            const lineMesh = createBoundaryLineMesh(ring, lineColor);
-            if(lineMesh) lineGroup.add(lineMesh);
-          });
-        });
-      }
-      return lineGroup;
-    }
-    
-    function createBoundaryLineMesh(ring, color) {
-      if(!ring || ring.length<2) return null;
-      // 닫기
-      if(!ring[0].every((val,idx)=>val===ring[ring.length-1][idx])) {
-        ring.push(ring[0]);
-      }
-      const points = ring.map(([lon, lat])=> lonLatToXYZ(lon, lat, globeRadius+0.005));
-      const geom = new THREE.BufferGeometry().setFromPoints(points);
-      const mat = new THREE.LineBasicMaterial({ color });
-      return new THREE.Line(geom, mat);
-    }
-    
+
     // ---------------------------
-    // 5) 국기 ShapeGeometry 생성 (경계선 내부)
+    // 국기 Shape 생성 (경계선 ShapeGeometry 기반)
     // ---------------------------
     async function createFlagShape(feature, iso2) {
-      // 바운딩박스 구하기
+      // 바운딩박스 및 중심 계산
       const { minLon, maxLon, minLat, maxLat, centerPos } = getBoundsCenter(feature);
-    
-      // Polygon or MultiPolygon -> shapeGroup
+
       const shapeGroup = new THREE.Group();
       const geom = feature.geometry;
-      if(geom.type==='Polygon') {
-        const mesh = polygonToShapeMesh(geom.coordinates, {minLon,maxLon,minLat,maxLat});
-        if(mesh) shapeGroup.add(mesh);
-      } else if(geom.type==='MultiPolygon') {
-        geom.coordinates.forEach(coordsArray=>{
-          const mesh = polygonToShapeMesh(coordsArray, {minLon,maxLon,minLat,maxLat});
-          if(mesh) shapeGroup.add(mesh);
+      if (geom.type === 'Polygon') {
+        const mesh = polygonToShapeMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat });
+        if (mesh) shapeGroup.add(mesh);
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(coordsArray => {
+          const mesh = polygonToShapeMesh(coordsArray, { minLon, maxLon, minLat, maxLat });
+          if (mesh) shapeGroup.add(mesh);
         });
       }
-    
-      // 국기 텍스처 로드
+
+      // 국기 텍스처 로드 및 재질 적용
       const flagTex = await loadFlagTexture(iso2);
-    
-      // shapeGroup 내 mesh들에 국기 재질 설정
-      shapeGroup.traverse(obj=>{
-        if(obj.isMesh) {
+      shapeGroup.traverse(obj => {
+        if (obj.isMesh) {
           obj.material.map = flagTex;
           obj.material.side = THREE.DoubleSide;
           obj.material.transparent = true;
@@ -296,13 +159,12 @@
           obj.material.needsUpdate = true;
         }
       });
-    
-      // 평면 위치: centerPos 근처
+
+      // shapeGroup 배치: 중심에 위치시키고, 구의 접평면 회전 적용
       shapeGroup.position.copy(centerPos);
-      // 평면 회전 (구 접평면)
       const normal = centerPos.clone().normalize();
       let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
-      if(tangent.length()<0.0001) {
+      if (tangent.length() < 0.0001) {
         tangent = new THREE.Vector3(0, -normal.z, normal.y);
       }
       tangent.normalize();
@@ -310,120 +172,246 @@
       const basis = new THREE.Matrix4();
       basis.makeBasis(tangent, bitangent, normal);
       shapeGroup.setRotationFromMatrix(basis);
-    
+
       return shapeGroup;
     }
-    
-    // polygon -> ShapeGeometry -> Mesh
-    function polygonToShapeMesh(coordsArray, {minLon, maxLon, minLat, maxLat}) {
-      if(!coordsArray || coordsArray.length===0) return null;
-    
-      // 외곽
+
+    // polygonToShapeMesh: coordsArray → ShapeGeometry Mesh
+    function polygonToShapeMesh(coordsArray, { minLon, maxLon, minLat, maxLat }) {
+      if (!coordsArray || coordsArray.length === 0) return null;
       const outerRing = coordsArray[0];
-      if(!outerRing || outerRing.length<3) return null;
-    
+      if (!outerRing || outerRing.length < 3) return null;
+
       const shape = new THREE.Shape(ringToVector2(outerRing));
-      // 홀
-      for(let i=1;i<coordsArray.length;i++){
+      for (let i = 1; i < coordsArray.length; i++) {
         const holeRing = coordsArray[i];
-        if(!holeRing || holeRing.length<3) continue;
+        if (!holeRing || holeRing.length < 3) continue;
         const holePath = new THREE.Path(ringToVector2(holeRing));
         shape.holes.push(holePath);
       }
-    
+
       const shapeGeom = new THREE.ShapeGeometry(shape);
-    
-      // UV 계산
       const posAttr = shapeGeom.getAttribute('position');
-      const uvArray=[];
-      for(let i=0; i<posAttr.count; i++){
+      const uvArray = [];
+      for (let i = 0; i < posAttr.count; i++) {
         const lon = posAttr.getX(i);
         const lat = posAttr.getY(i);
-        const u = (lon - minLon)/(maxLon - minLon);
-        const v = (lat - minLat)/(maxLat - minLat);
-        uvArray.push(u,v);
+        const u = (lon - minLon) / (maxLon - minLon);
+        const v = (lat - minLat) / (maxLat - minLat);
+        uvArray.push(u, v);
       }
-      shapeGeom.setAttribute('uv', new THREE.Float32BufferAttribute(uvArray,2));
-    
-      // (x=lon, y=lat, z=0)인 plane
-      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const mesh = new THREE.Mesh(shapeGeom, mat);
-      return mesh;
+      shapeGeom.setAttribute('uv', new THREE.Float32BufferAttribute(uvArray, 2));
+      return new THREE.Mesh(shapeGeom, new THREE.MeshBasicMaterial({ color: 0xffffff }));
     }
-    
+
     function ringToVector2(ring) {
-      const pts = ring.map(([lon,lat])=> new THREE.Vector2(lon,lat));
-      if(pts.length>1 && pts[0].equals(pts[pts.length-1])) {
+      const pts = ring.map(([lon, lat]) => new THREE.Vector2(lon, lat));
+      if (pts.length > 1 && pts[0].equals(pts[pts.length - 1])) {
         pts.pop();
       }
       return pts;
     }
-    
-    // ---------------------------
-    // 6) 바운딩박스 & 중심
-    // ---------------------------
+
+    // getBoundsCenter: 바운딩박스와 중심 3D 좌표 계산
     function getBoundsCenter(feature) {
-      let minLon=180, maxLon=-180, minLat=90, maxLat=-90;
+      let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
       const geom = feature.geometry;
-      if(geom.type==='Polygon') {
-        geom.coordinates.forEach(ring=>{
-          ring.forEach(([lon,lat])=>{
-            if(lon<minLon) minLon=lon;
-            if(lon>maxLon) maxLon=lon;
-            if(lat<minLat) minLat=lat;
-            if(lat>maxLat) maxLat=lat;
+      if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => {
+          ring.forEach(([lon, lat]) => {
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
           });
         });
-      } else if(geom.type==='MultiPolygon') {
-        geom.coordinates.forEach(poly=>{
-          poly.forEach(ring=>{
-            ring.forEach(([lon,lat])=>{
-              if(lon<minLon) minLon=lon;
-              if(lon>maxLon) maxLon=lon;
-              if(lat<minLat) minLat=lat;
-              if(lat>maxLat) maxLat=lat;
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(poly => {
+          poly.forEach(ring => {
+            ring.forEach(([lon, lat]) => {
+              if (lon < minLon) minLon = lon;
+              if (lon > maxLon) maxLon = lon;
+              if (lat < minLat) minLat = lat;
+              if (lat > maxLat) maxLat = lat;
             });
           });
         });
       }
-      const centerLon = (minLon+maxLon)/2;
-      const centerLat = (minLat+maxLat)/2;
-      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius+0.005);
-      return {minLon,maxLon,minLat,maxLat,centerLon,centerLat,centerPos};
+      const centerLon = (minLon + maxLon) / 2;
+      const centerLat = (minLat + maxLat) / 2;
+      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.005);
+      return { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos };
     }
-    
+
     // ---------------------------
-    // 7) 이전 국기 Mesh 제거
+    // 초기화 및 애니메이션
     // ---------------------------
+    function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+      camera.position.set(2, 2, 2);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.rotateSpeed = 0.5;
+      controls.zoomSpeed = 1.2;
+      controls.panSpeed = 1.0;
+      controls.update();
+
+      const sphereGeometry = new THREE.SphereGeometry(globeRadius, 64, 64);
+      const textureLoader = new THREE.TextureLoader();
+      const globeTexture = textureLoader.load('eo_base_2020_clean_geo_optimized.jpg');
+      const sphereMaterial = new THREE.MeshBasicMaterial({ map: globeTexture });
+      globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      scene.add(globeMesh);
+
+      fetch('countries.geojson')
+        .then(response => response.json())
+        .then(data => {
+          countryGeoJSON = data;
+          document.getElementById('iso-code').value = "south korea";
+          searchCountries();
+        })
+        .catch(err => console.error('GeoJSON 로드 실패:', err));
+      
+      animate();
+    }
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+      TWEEN.update(time);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // ---------------------------
+    // 검색 및 국가 표시
+    // ---------------------------
+    function searchCountries() {
+      const searchTerm = document.getElementById('iso-code').value.trim().toLowerCase();
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = "";
+      if (!countryGeoJSON) {
+        alert("GeoJSON 데이터가 아직 로드되지 않았습니다.");
+        return;
+      }
+      const matches = countryGeoJSON.features.filter(feature => {
+        return getCountryName(feature).toLowerCase().includes(searchTerm);
+      });
+      if (matches.length === 0) {
+        resultsDiv.innerHTML = "<div>검색 결과가 없습니다.</div>";
+        return;
+      }
+      if (matches.length === 1) {
+        displayCountry(matches[0]);
+        resultsDiv.innerHTML = "";
+      } else {
+        matches.forEach(feature => {
+          const div = document.createElement('div');
+          div.className = "result-item";
+          const iso2 = getISO2(feature) || "??";
+          div.textContent = `${getCountryName(feature)} (${iso2})`;
+          div.addEventListener('click', () => {
+            displayCountry(feature);
+            resultsDiv.innerHTML = "";
+            document.getElementById('iso-code').value = getCountryName(feature);
+          });
+          resultsDiv.appendChild(div);
+        });
+      }
+    }
+
+    function displayCountry(feature) {
+      drawCountryBoundary(feature);
+      const iso2 = getISO2(feature) || "??";
+      createFlagShape(feature, iso2)
+        .then(flagShape => {
+          removeOldFlagMesh();
+          currentFlagMesh = flagShape;
+          scene.add(currentFlagMesh);
+        })
+        .catch(err => console.warn("국기 Shape 생성 실패:", err));
+
+      const { centerPos } = getBoundsCenter(feature);
+      new TWEEN.Tween(camera.position)
+        .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .onComplete(() => { controls.target.set(0,0,0); })
+        .start();
+    }
+
+    // ---------------------------
+    // 경계선(Line) 표시 (South Korea는 항상 유지)
+    // ---------------------------
+    function drawCountryBoundary(feature) {
+      const isoA3 = feature.properties.ISO_A3;
+      const lineColor = (isoA3 === "KOR") ? 0x0000ff : 0xff0000;
+      // South Korea 경계선은 항상 남김
+      if (isoA3 !== "KOR" && currentBoundaryLine) {
+        scene.remove(currentBoundaryLine);
+        disposeObject(currentBoundaryLine);
+        currentBoundaryLine = null;
+      }
+      if (isoA3 === "KOR") {
+        // South Korea 경계선 생성 후 scene에 추가하고, 제거하지 않음
+        if (!koreaBoundaryLine) {
+          koreaBoundaryLine = createBoundaryLineGroup(feature);
+          scene.add(koreaBoundaryLine);
+        }
+        return;
+      }
+      currentBoundaryLine = createBoundaryLineGroup(feature);
+      scene.add(currentBoundaryLine);
+    }
+
+    function createBoundaryLineGroup(feature) {
+      const lineGroup = new THREE.Group();
+      const geom = feature.geometry;
+      if (!geom) return lineGroup;
+      const lineColor = 0xff0000;
+      if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => {
+          const lineMesh = createBoundaryLineMesh(ring, lineColor);
+          if (lineMesh) lineGroup.add(lineMesh);
+        });
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(poly => {
+          poly.forEach(ring => {
+            const lineMesh = createBoundaryLineMesh(ring, lineColor);
+            if (lineMesh) lineGroup.add(lineMesh);
+          });
+        });
+      }
+      return lineGroup;
+    }
+
+    function createBoundaryLineMesh(ring, color) {
+      if (!ring || ring.length < 2) return null;
+      if (!ring[0].every((val, idx) => val === ring[ring.length - 1][idx])) {
+        ring.push(ring[0]);
+      }
+      const points = ring.map(([lon, lat]) => lonLatToXYZ(lon, lat, globeRadius + 0.005));
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color });
+      return new THREE.Line(geometry, material);
+    }
+
     function removeOldFlagMesh() {
-      if(currentFlagMesh) {
+      if (currentFlagMesh) {
         scene.remove(currentFlagMesh);
         disposeObject(currentFlagMesh);
         currentFlagMesh = null;
       }
     }
-    
-    // 공통 dispose
-    function disposeObject(obj) {
-      obj.traverse(child=>{
-        if(child.isMesh) {
-          child.geometry.dispose();
-          if(child.material.map) child.material.map.dispose();
-          child.material.dispose();
-        }
-      });
-    }
-    
-    // ---------------------------
-    // 이벤트
-    // ---------------------------
+
+    window.onload = init;
     document.getElementById('searchBtn').addEventListener('click', searchCountries);
-    window.addEventListener('resize',()=>{
-      camera.aspect=window.innerWidth/window.innerHeight;
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
-    window.onload = init;
   </script>
 </body>
 </html>
