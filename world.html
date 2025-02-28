@@ -431,7 +431,7 @@
         .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
         .onComplete(() => {
-          controls.target.copy(centerPos);
+          controls.target.set(0, 0, 0);
           controls.update();
         })
         .start();
