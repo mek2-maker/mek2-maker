@@ -85,7 +85,7 @@
         if (iso2 === "??") {
           return reject("ISO2 코드가 없어 국기 이미지를 찾을 수 없음");
         }
-        const exts = ['gif','png','jpg','bmp'];
+        const exts = ['gif', 'png', 'jpg', 'bmp'];
         const basePath = './flag/';
         const loader = new THREE.TextureLoader();
         function tryLoad(i) {
@@ -104,7 +104,7 @@
             undefined,
             () => {
               console.warn("Failed to load:", url);
-              tryLoad(i+1);
+              tryLoad(i + 1);
             }
           );
         }
@@ -181,7 +181,7 @@
       return new THREE.Mesh(geometry, material);
     }
 
-    // 로컬 2D 변환 함수
+    // 로컬 2D 변환 함수: (lon, lat)에서 (centerLon, centerLat)를 빼고 도->라디안 변환
     function toLocal2D(ring, cLon, cLat) {
       const degToRad = Math.PI / 180;
       return ring.map(([lon, lat]) => {
@@ -192,13 +192,16 @@
     }
 
     // ----------------------------------------------------------------
-    // (2) createFlagShape: 국기 모양은 기존 방식 그대로, 위치는 turf.centroid() 기준으로 설정
+    // (2) createFlagShape: 국기 모양은 기존 방식 그대로, 위치는 bbox 중심을 사용
     // ----------------------------------------------------------------
     async function createFlagShape(feature, iso2) {
       console.log("createFlagShape: 시작", feature, iso2);
-      // turf.centroid()를 사용해 면적 가중 중심(경계선 기준)을 계산합니다.
+      
+      // bbox 중심을 계산하여 국기 위치로 사용합니다.
+      // getBoundsCenter()는 모든 좌표의 단순 평균(경계 bbox의 중심)을 구합니다.
       const { centerLon, centerLat, centerPos } = getBoundsCenter(feature);
-      // UV 매핑을 위한 bbox 계산 (기존 방식)
+      
+      // UV 매핑을 위한 bbox 계산은 그대로 진행합니다.
       const { minLon, maxLon, minLat, maxLat } = (function(){
         let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
         const geom = feature.geometry;
@@ -225,7 +228,8 @@
         }
         return { minLon, maxLon, minLat, maxLat };
       })();
-      // 국기 모양 생성 시, polygonToSphereMesh()에 turf.centroid()에서 구한 centerLon, centerLat를 사용합니다.
+
+      // 국기 모양 생성 시, polygonToSphereMesh()에 bbox 중심을 기준으로 전달합니다.
       const meshGroup = new THREE.Group();
       const geom = feature.geometry;
       if (geom.type === 'Polygon') {
@@ -244,10 +248,11 @@
           obj.material.needsUpdate = true;
         }
       });
-      // [변경된 부분]
-      // 국기 위치를 turf.centroid()로 계산한 centerPos를 그대로 사용합니다.
-      // (추가 translation을 제거하여, polygonToSphereMesh()에서 계산된 절대 좌표가 그대로 유지됩니다.)
-      // meshGroup.position.copy(centerPos);  // 이 줄을 제거합니다.
+      
+      // 국기 위치는 이미 polygonToSphereMesh() 함수 내에서 계산된 좌표를 사용하므로,
+      // 추가적인 translation 없이 그대로 두면 경계선과 일치합니다.
+      // 따라서 meshGroup.position 설정은 제거합니다.
+      
       // 국기 모양이 구 표면에 맞게 회전하도록 조정
       const normal = centerPos.clone().normalize();
       let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
@@ -259,19 +264,42 @@
       const basis = new THREE.Matrix4();
       basis.makeBasis(tangent, bitangent, normal);
       meshGroup.setRotationFromMatrix(basis);
+      
       console.log("createFlagShape: 최종 meshGroup", meshGroup);
       return meshGroup;
     }
 
     // ----------------------------------------------------------------
-    // (3) getBoundsCenter: turf.centroid()를 사용해 면적 가중 중심을 계산합니다.
+    // (3) getBoundsCenter: bbox 중심(모든 좌표의 산술 평균)으로 계산합니다.
     // ----------------------------------------------------------------
     function getBoundsCenter(feature) {
-      const centroid = turf.centroid(feature);
-      const [centerLon, centerLat] = centroid.geometry.coordinates;
-      // boundary와 국기가 같은 오프셋(globeRadius + 0.02)을 사용하도록 합니다.
+      let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+      const geom = feature.geometry;
+      if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => {
+          ring.forEach(([lon, lat]) => {
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+          });
+        });
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(poly => {
+          poly.forEach(ring => {
+            ring.forEach(([lon, lat]) => {
+              if (lon < minLon) minLon = lon;
+              if (lon > maxLon) maxLon = lon;
+              if (lat < minLat) minLat = lat;
+              if (lat > maxLat) maxLat = lat;
+            });
+          });
+        });
+      }
+      const centerLon = (minLon + maxLon) / 2;
+      const centerLat = (minLat + maxLat) / 2;
       const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.02);
-      return { centerLon, centerLat, centerPos };
+      return { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos };
     }
 
     // ----------------------------------------------------------------
@@ -367,7 +395,7 @@
           console.log("BoxHelper added to scene for debugging.");
         })
         .catch(err => console.warn("국기 Shape 생성 실패:", err));
-      // 카메라 이동
+      // 카메라 이동 (bbox 중심 사용)
       const { centerPos } = getBoundsCenter(feature);
       new TWEEN.Tween(camera.position)
         .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
