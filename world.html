@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>3D 지구본 (경계선 내부 국기 표시, South Korea 경계 유지)</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline';">
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@5/turf.min.js"></script>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; }
     #overlay {
@@ -203,40 +203,9 @@
     async function createFlagShape(feature, iso2) {
       console.log("createFlagShape: 시작", feature, iso2);
 
-      // turf.centroid를 사용해 정교한 중심 계산 (국기와 경계의 기준을 일치)
-      const centroid = turf.centroid(feature);
-      const [centerLon, centerLat] = centroid.geometry.coordinates;
-      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.02);
+      // 국기 위치 계산에 bbox 중심이 아닌, 경계 좌표의 평균을 사용합니다.
+      const { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos } = getBoundsCenter(feature);
       
-      // 기존에 bbox 방식으로 계산하던 부분 대신, turf.centroid를 기준으로 min, max는 그대로 전달 (UV 매핑 등)
-      // 만약 UV 매핑이 필요하다면 별도 bbox 계산을 유지할 수 있으나, 국기 위치는 centroid를 사용합니다.
-      const { minLon, maxLon, minLat, maxLat } = (function(){
-        let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
-        const geom = feature.geometry;
-        if (geom.type === 'Polygon') {
-          geom.coordinates.forEach(ring => {
-            ring.forEach(([lon, lat]) => {
-              if (lon < minLon) minLon = lon;
-              if (lon > maxLon) maxLon = lon;
-              if (lat < minLat) minLat = lat;
-              if (lat > maxLat) maxLat = lat;
-            });
-          });
-        } else if (geom.type === 'MultiPolygon') {
-          geom.coordinates.forEach(poly => {
-            poly.forEach(ring => {
-              ring.forEach(([lon, lat]) => {
-                if (lon < minLon) minLon = lon;
-                if (lon > maxLon) maxLon = lon;
-                if (lat < minLat) minLat = lat;
-                if (lat > maxLat) maxLat = lat;
-              });
-            });
-          });
-        }
-        return { minLon, maxLon, minLat, maxLat };
-      })();
-
       const meshGroup = new THREE.Group();
       const geom = feature.geometry;
 
@@ -259,9 +228,9 @@
       });
 
       // [변경된 부분]
-      // 국기 위치를 경계선의 중심( turf.centroid 기반 )과 일치시키기 위해
-      // meshGroup.position 설정을 제거합니다.
-      // (원래 meshGroup.position.copy(centerPos); 코드가 있었다면 삭제)
+      // 국기 위치를 경계 좌표의 평균( getBoundsCenter에서 계산된 centerPos )으로 일치시키기 위해
+      // meshGroup.position.copy(centerPos); 코드는 제거합니다.
+      // (이미 polygonToSphereMesh 함수 내에서 절대 좌표로 계산되어 배치됨)
 
       const normal = centerPos.clone().normalize();
       let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
@@ -279,14 +248,43 @@
     }
 
     // ----------------------------------------------------------------
-    // (3) 바운딩박스 & 중심 계산 (기존 bbox 방식 대신 turf.centroid 사용)
+    // (3) 바운딩박스 & 중심 계산 (경계 좌표의 평균 사용)
     // ----------------------------------------------------------------
     function getBoundsCenter(feature) {
-      // turf.centroid를 이용한 중심 계산
-      const centroid = turf.centroid(feature);
-      const [centerLon, centerLat] = centroid.geometry.coordinates;
-      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.02);
-      return { centerLon, centerLat, centerPos };
+      let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+      let totalLon = 0, totalLat = 0, count = 0;
+      const geom = feature.geometry;
+      if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => {
+          ring.forEach(([lon, lat]) => {
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+            totalLon += lon;
+            totalLat += lat;
+            count++;
+          });
+        });
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(poly => {
+          poly.forEach(ring => {
+            ring.forEach(([lon, lat]) => {
+              if (lon < minLon) minLon = lon;
+              if (lon > maxLon) maxLon = lon;
+              if (lat < minLat) minLat = lat;
+              if (lat > maxLat) maxLat = lat;
+              totalLon += lon;
+              totalLat += lat;
+              count++;
+            });
+          });
+        });
+      }
+      const avgLon = totalLon / count;
+      const avgLat = totalLat / count;
+      const centerPos = lonLatToXYZ(avgLon, avgLat, globeRadius + 0.02);
+      return { minLon, maxLon, minLat, maxLat, centerLon: avgLon, centerLat: avgLat, centerPos };
     }
 
     // ----------------------------------------------------------------
