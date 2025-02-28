@@ -58,9 +58,9 @@
     let countryGeoJSON = null;
 
     // 현재 장면에 표시된 국기/경계 Mesh
-    let currentFlagMesh = null;     // 검색 국가 국기 Mesh (곡면)
-    let currentBoundaryLine = null; // 검색 국가 경계선
-    let koreaBoundaryLine = null;   // South Korea 경계선은 계속 유지
+    let currentFlagMesh = null;
+    let currentBoundaryLine = null;
+    let koreaBoundaryLine = null;
 
     // 헬퍼 함수들
     function getISO2(feature) {
@@ -198,22 +198,7 @@
     }
 
     // ----------------------------------------------------------------
-    // 새로 추가: GeoJSON에서 국기 위치로 사용할 좌표를 반환하는 함수
-    // (외곽 다각형의 첫 번째 좌표를 사용)
-    function getFlagCoords(feature) {
-      if (feature.geometry.type === 'Polygon') {
-        return feature.geometry.coordinates[0][0];
-      } else if (feature.geometry.type === 'MultiPolygon') {
-        return feature.geometry.coordinates[0][0][0];
-      }
-    }
-    function getFlagPosition(feature) {
-      const [lon, lat] = getFlagCoords(feature);
-      return lonLatToXYZ(lon, lat, globeRadius + 0.02);
-    }
-
-    // ----------------------------------------------------------------
-    // (2) createFlagShape: feature에서 폴리곤 → polygonToSphereMesh 생성
+    // (2) createFlagShape: 국기 모양은 기존 방식 그대로, 위치는 turf.centroid() 기반으로 설정
     // ----------------------------------------------------------------
     async function createFlagShape(feature, iso2) {
       console.log("createFlagShape: 시작", feature, iso2);
@@ -249,7 +234,7 @@
         return { minLon, maxLon, minLat, maxLat };
       })();
 
-      // 국기 모양 생성 시 중심 좌표로 turf.centroid에서 구한 centerLon, centerLat 사용
+      // 국기 모양 생성 시, polygonToSphereMesh()에 turf.centroid()에서 구한 centerLon, centerLat를 사용합니다.
       const meshGroup = new THREE.Group();
       const geom = feature.geometry;
       if (geom.type === 'Polygon') {
@@ -270,7 +255,7 @@
         }
       });
 
-      // 국기 위치를 turf.centroid로 계산한 centerPos로 설정
+      // 국기 위치를 turf.centroid()에서 구한 centerPos로 설정
       meshGroup.position.copy(centerPos);
 
       // 국기 모양이 구 표면에 맞게 회전하도록 조정
@@ -345,7 +330,6 @@
       renderer.render(scene, camera);
     }
 
-
     // ----------------------------------------------------------------
     // 검색 및 국가 표시
     // ----------------------------------------------------------------
@@ -407,7 +391,7 @@
         .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
         .onComplete(() => {
-          controls.target.set(0, 0, 0);
+          controls.target.copy(centerPos);
           controls.update();
         })
         .start();
