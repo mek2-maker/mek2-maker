@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>3D 지구본 (경계선 내부 국기 표시, South Korea 경계 유지)</title>
-  <!-- CSP 설정: 외부 CDN 허용 -->
+  <!-- 외부 CDN 허용을 위해 'unsafe-eval' 포함 -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline';">
-  <!-- Turf.js v6 로드 -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; }
@@ -87,7 +86,7 @@
         if (iso2 === "??") {
           return reject("ISO2 코드가 없어 국기 이미지를 찾을 수 없음");
         }
-        const exts = ['gif','png','jpg','bmp'];
+        const exts = ['gif', 'png', 'jpg', 'bmp'];
         const basePath = './flag/';
         const loader = new THREE.TextureLoader();
         function tryLoad(i) {
@@ -106,7 +105,7 @@
             undefined,
             () => {
               console.warn("Failed to load:", url);
-              tryLoad(i+1);
+              tryLoad(i + 1);
             }
           );
         }
@@ -133,9 +132,10 @@
     }
 
     // ----------------------------------------------------------------
-    // (1) polygonToSphereMesh: earcut를 이용해 "구 표면"에 맞춘 3D 폴리곤 생성 (국기 모양 자르기는 사용하지 않습니다)
+    // (1) polygonToSphereMesh: earcut를 이용해 "구 표면"에 맞춘 3D 폴리곤 생성
+    // basePos를 인자로 받아, 각 정점에서 basePos를 빼서 로컬 좌표로 만듭니다.
     // ----------------------------------------------------------------
-    function polygonToSphereMesh(coordsArray, { minLon, maxLon, minLat, maxLat, centerLon, centerLat }, radius = globeRadius + 0.02) {
+    function polygonToSphereMesh(coordsArray, { minLon, maxLon, minLat, maxLat, centerLon, centerLat }, radius = globeRadius + 0.02, basePos = new THREE.Vector3(0,0,0)) {
       const outerRing = coordsArray[0];
       if (!outerRing || outerRing.length < 3) return null;
       const outer2D = toLocal2D(outerRing, centerLon, centerLat);
@@ -165,7 +165,9 @@
         const y2D = verts2D[idx * 2 + 1];
         const realLon = centerLon + (x2D / degToRad);
         const realLat = centerLat + (y2D / degToRad);
-        const v3 = lonLatToXYZ(realLon, realLat, radius);
+        let v3 = lonLatToXYZ(realLon, realLat, radius);
+        // 상대 좌표로 만들기: basePos (보통 centerPos)를 빼줍니다.
+        v3.sub(basePos);
         positions.push(v3.x, v3.y, v3.z);
         const u = (realLon - minLon) / (maxLon - minLon);
         const v = (realLat - minLat) / (maxLat - minLat);
@@ -183,7 +185,7 @@
       return new THREE.Mesh(geometry, material);
     }
 
-    // 로컬 2D 변환 함수
+    // 로컬 2D 변환 함수: (lon, lat)에서 (centerLon, centerLat)를 빼고 도->라디안 변환
     function toLocal2D(ring, cLon, cLat) {
       const degToRad = Math.PI / 180;
       return ring.map(([lon, lat]) => {
@@ -194,42 +196,83 @@
     }
 
     // ----------------------------------------------------------------
-    // (2) createFlagShape: 국기 파일(플레인)을 그대로 해당 국가 경계의 위치에 배치
+    // (2) createFlagShape: 국기 모양(earcut 기반)을 생성하고,
+    // 국기 파일(텍스처)를 그대로 해당 국가의 bbox 중심 위치에 배치
     // ----------------------------------------------------------------
     async function createFlagShape(feature, iso2) {
       console.log("createFlagShape: 시작", feature, iso2);
       
-      // 국기 위치를 계산하기 위해, 경계의 면적 가중 중심(turf.centroid()) 대신
-      // 초기 방식처럼 GeoJSON의 bbox 중심(모든 좌표의 단순 평균)을 사용합니다.
+      // bbox 중심(모든 좌표의 단순 평균)을 계산하여 기준 위치로 사용
       const { centerLon, centerLat, centerPos } = getBoundsCenter(feature);
       
-      // 국기 텍스처 로드
+      // UV 매핑을 위한 bbox 계산은 그대로 진행합니다.
+      const { minLon, maxLon, minLat, maxLat } = (function(){
+        let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+        const geom = feature.geometry;
+        if (geom.type === 'Polygon') {
+          geom.coordinates.forEach(ring => {
+            ring.forEach(([lon, lat]) => {
+              if (lon < minLon) minLon = lon;
+              if (lon > maxLon) maxLon = lon;
+              if (lat < minLat) minLat = lat;
+              if (lat > maxLat) maxLat = lat;
+            });
+          });
+        } else if (geom.type === 'MultiPolygon') {
+          geom.coordinates.forEach(poly => {
+            poly.forEach(ring => {
+              ring.forEach(([lon, lat]) => {
+                if (lon < minLon) minLon = lon;
+                if (lon > maxLon) maxLon = lon;
+                if (lat < minLat) minLat = lat;
+                if (lat > maxLat) maxLat = lat;
+              });
+            });
+          });
+        }
+        return { minLon, maxLon, minLat, maxLat };
+      })();
+
+      // 국기 모양(earcut 기반)은 polygonToSphereMesh()를 사용합니다.
+      // 여기서는 basePos로 centerPos를 전달하여, 계산된 정점들이 centerPos를 기준으로 상대 좌표로 만듭니다.
+      const meshGroup = new THREE.Group();
+      const geom = feature.geometry;
+      if (geom.type === 'Polygon') {
+        const mesh = polygonToSphereMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat, centerLon, centerLat }, globeRadius + 0.02, centerPos);
+        if (mesh) meshGroup.add(mesh);
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(polyCoords => {
+          const mesh = polygonToSphereMesh(polyCoords, { minLon, maxLon, minLat, maxLat, centerLon, centerLat }, globeRadius + 0.02, centerPos);
+          if (mesh) meshGroup.add(mesh);
+        });
+      }
+      
       const flagTex = await loadFlagTexture(iso2);
-      
-      // 국기 파일을 그대로 사용하기 위해 PlaneGeometry를 생성합니다.
-      // 크기는 임의로 지정(필요 시 조정)
-      const flagWidth = 0.3;
-      const flagHeight = 0.2;
-      const geometry = new THREE.PlaneGeometry(flagWidth, flagHeight);
-      const material = new THREE.MeshBasicMaterial({
-        map: flagTex,
-        transparent: true
+      meshGroup.traverse(obj => {
+        if (obj.isMesh) {
+          obj.material.map = flagTex;
+          obj.material.needsUpdate = true;
+        }
       });
-      const flagMesh = new THREE.Mesh(geometry, material);
       
-      // 국기 위치를 getBoundsCenter()로 계산한 centerPos에 배치합니다.
-      // 약간 오프셋을 주어 구 표면 위에 나타나도록 globeRadius + 약간 추가한 값을 사용할 수 있습니다.
-      flagMesh.position.copy(centerPos);
+      // 이제 meshGroup의 정점들은 centerPos를 기준으로 상대 좌표로 계산되었으므로,
+      // 전체 그룹의 위치를 centerPos로 설정합니다.
+      meshGroup.position.copy(centerPos);
       
-      // 국기 플레인의 기본 노말은 (0, 0, 1)입니다.
-      // 구 표면의 노말은 centerPos의 정규화 값과 동일하므로, (0, 0, 1)에서 그 방향으로 회전시키면 됩니다.
+      // 국기 모양이 구 표면에 맞게 회전하도록 조정
       const normal = centerPos.clone().normalize();
-      const quaternion = new THREE.Quaternion();
-      quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-      flagMesh.setRotationFromQuaternion(quaternion);
+      let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
+      if (tangent.length() < 0.0001) {
+        tangent = new THREE.Vector3(0, -normal.z, normal.y);
+      }
+      tangent.normalize();
+      const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+      const basis = new THREE.Matrix4();
+      basis.makeBasis(tangent, bitangent, normal);
+      meshGroup.setRotationFromMatrix(basis);
       
-      console.log("createFlagShape: 최종 flagMesh", flagMesh);
-      return flagMesh;
+      console.log("createFlagShape: 최종 meshGroup", meshGroup);
+      return meshGroup;
     }
 
     // ----------------------------------------------------------------
