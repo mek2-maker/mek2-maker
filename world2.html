@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>3D 지구본 (경계선 내부 국기 표시, South Korea 경계 유지)</title>
+  <!-- CSP 설정: 외부 CDN 허용 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline';">
+  <!-- Turf.js v6 로드 -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(255,255,255,0.9);
+      padding: 10px;
+      border-radius: 5px;
+      font-family: sans-serif;
+      width: 300px;
+      max-width: 80vw;
+      box-sizing: border-box;
+    }
+    #results {
+      margin-top: 10px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .result-item {
+      padding: 5px;
+      border-bottom: 1px solid #ccc;
+      cursor: pointer;
+    }
+    .result-item:hover { background-color: #eee; }
+    #overlay input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <label for="iso-code">국가명 검색 (예: Korea, China):</label>
+    <input type="text" id="iso-code" placeholder="국가명을 입력하세요">
+    <button id="searchBtn">검색</button>
+    <div id="results"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from './libs/three.module.js';
+    import { OrbitControls } from './libs/OrbitControls.js';
+    import TWEEN from './libs/tween.esm.js';
+    import earcut from './libs/earcut.js';
+
+    let scene, camera, renderer, controls;
+    const globeRadius = 1;
+    let globeMesh;
+    let countryGeoJSON = null;
+
+    // 현재 장면에 표시된 국기/경계 Mesh
+    let currentFlagMesh = null;
+    let currentBoundaryLine = null;
+    let koreaBoundaryLine = null;
+
+    // 헬퍼 함수들
+    function getISO2(feature) {
+      const iso2 = feature.properties.ISO_A2;
+      return iso2 ? iso2.trim() : null;
+    }
+    function getCountryName(feature) {
+      return feature.properties.ADMIN;
+    }
+    function lonLatToXYZ(lon, lat, radius = globeRadius) {
+      const phi = (90 - lat) * (Math.PI / 180);
+      const theta = (lon + 180) * (Math.PI / 180);
+      const x = -radius * Math.sin(phi) * Math.cos(theta);
+      const z = radius * Math.sin(phi) * Math.sin(theta);
+      const y = radius * Math.cos(phi);
+      return new THREE.Vector3(x, y, z);
+    }
+
+    // 국기 텍스처 로드 함수
+    function loadFlagTexture(iso2) {
+      return new Promise((resolve, reject) => {
+        if (iso2 === "??") {
+          return reject("ISO2 코드가 없어 국기 이미지를 찾을 수 없음");
+        }
+        const exts = ['gif','png','jpg','bmp'];
+        const basePath = './flag/';
+        const loader = new THREE.TextureLoader();
+        function tryLoad(i) {
+          if (i >= exts.length) {
+            reject(`모든 확장자를 시도했으나 '${iso2}' 국기 파일 없음`);
+            return;
+          }
+          const url = `${basePath}${iso2}.${exts[i]}`;
+          console.log("Trying to load:", url);
+          loader.load(
+            url,
+            texture => {
+              console.log("Loaded flag texture:", url);
+              resolve(texture);
+            },
+            undefined,
+            () => {
+              console.warn("Failed to load:", url);
+              tryLoad(i+1);
+            }
+          );
+        }
+        tryLoad(0);
+      });
+    }
+
+    // 기존 국기 Mesh 제거
+    function removeOldFlagMesh() {
+      if (currentFlagMesh) {
+        scene.remove(currentFlagMesh);
+        disposeObject(currentFlagMesh);
+        currentFlagMesh = null;
+      }
+    }
+    function disposeObject(obj) {
+      obj.traverse(child => {
+        if (child.isMesh) {
+          child.geometry.dispose();
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
+        }
+      });
+    }
+
+    // ----------------------------------------------------------------
+    // (1) polygonToSphereMesh: earcut를 이용해 "구 표면"에 맞춘 3D 폴리곤 생성 (국기 모양 자르기는 사용하지 않습니다)
+    // ----------------------------------------------------------------
+    function polygonToSphereMesh(coordsArray, { minLon, maxLon, minLat, maxLat, centerLon, centerLat }, radius = globeRadius + 0.02) {
+      const outerRing = coordsArray[0];
+      if (!outerRing || outerRing.length < 3) return null;
+      const outer2D = toLocal2D(outerRing, centerLon, centerLat);
+      const hole2DArray = [];
+      for (let i = 1; i < coordsArray.length; i++) {
+        if (coordsArray[i] && coordsArray[i].length >= 3) {
+          hole2DArray.push(toLocal2D(coordsArray[i], centerLon, centerLat));
+        }
+      }
+      const verts2D = [];
+      const holeIndices = [];
+      outer2D.forEach(p => verts2D.push(p[0], p[1]));
+      let acc = outer2D.length;
+      hole2DArray.forEach(h => {
+        holeIndices.push(acc);
+        h.forEach(p => verts2D.push(p[0], p[1]));
+        acc += h.length;
+      });
+      const indices = earcut(verts2D, holeIndices, 2);
+      const geometry = new THREE.BufferGeometry();
+      const positions = [];
+      const uvs = [];
+      const degToRad = Math.PI / 180;
+      for (let i = 0; i < indices.length; i++) {
+        const idx = indices[i];
+        const x2D = verts2D[idx * 2];
+        const y2D = verts2D[idx * 2 + 1];
+        const realLon = centerLon + (x2D / degToRad);
+        const realLat = centerLat + (y2D / degToRad);
+        const v3 = lonLatToXYZ(realLon, realLat, radius);
+        positions.push(v3.x, v3.y, v3.z);
+        const u = (realLon - minLon) / (maxLon - minLon);
+        const v = (realLat - minLat) / (maxLat - minLat);
+        uvs.push(u, v);
+      }
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(positions), 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(uvs), 2));
+      geometry.computeVertexNormals();
+      const material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.6
+      });
+      return new THREE.Mesh(geometry, material);
+    }
+
+    // 로컬 2D 변환 함수
+    function toLocal2D(ring, cLon, cLat) {
+      const degToRad = Math.PI / 180;
+      return ring.map(([lon, lat]) => {
+        const dx = (lon - cLon) * degToRad;
+        const dy = (lat - cLat) * degToRad;
+        return [dx, dy];
+      });
+    }
+
+    // ----------------------------------------------------------------
+    // (2) createFlagShape: 국기 파일(플레인)을 그대로 해당 국가 경계의 위치에 배치
+    // ----------------------------------------------------------------
+    async function createFlagShape(feature, iso2) {
+      console.log("createFlagShape: 시작", feature, iso2);
+      
+      // 국기 위치를 계산하기 위해, 경계의 면적 가중 중심(turf.centroid()) 대신
+      // 초기 방식처럼 GeoJSON의 bbox 중심(모든 좌표의 단순 평균)을 사용합니다.
+      const { centerLon, centerLat, centerPos } = getBoundsCenter(feature);
+      
+      // 국기 텍스처 로드
+      const flagTex = await loadFlagTexture(iso2);
+      
+      // 국기 파일을 그대로 사용하기 위해 PlaneGeometry를 생성합니다.
+      // 크기는 임의로 지정(필요 시 조정)
+      const flagWidth = 0.3;
+      const flagHeight = 0.2;
+      const geometry = new THREE.PlaneGeometry(flagWidth, flagHeight);
+      const material = new THREE.MeshBasicMaterial({
+        map: flagTex,
+        transparent: true
+      });
+      const flagMesh = new THREE.Mesh(geometry, material);
+      
+      // 국기 위치를 getBoundsCenter()로 계산한 centerPos에 배치합니다.
+      // 약간 오프셋을 주어 구 표면 위에 나타나도록 globeRadius + 약간 추가한 값을 사용할 수 있습니다.
+      flagMesh.position.copy(centerPos);
+      
+      // 국기 플레인의 기본 노말은 (0, 0, 1)입니다.
+      // 구 표면의 노말은 centerPos의 정규화 값과 동일하므로, (0, 0, 1)에서 그 방향으로 회전시키면 됩니다.
+      const normal = centerPos.clone().normalize();
+      const quaternion = new THREE.Quaternion();
+      quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+      flagMesh.setRotationFromQuaternion(quaternion);
+      
+      console.log("createFlagShape: 최종 flagMesh", flagMesh);
+      return flagMesh;
+    }
+
+    // ----------------------------------------------------------------
+    // (3) getBoundsCenter: bbox 중심(모든 좌표의 단순 평균)으로 계산합니다.
+    // ----------------------------------------------------------------
+    function getBoundsCenter(feature) {
+      let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+      const geom = feature.geometry;
+      if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => {
+          ring.forEach(([lon, lat]) => {
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+          });
+        });
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(poly => {
+          poly.forEach(ring => {
+            ring.forEach(([lon, lat]) => {
+              if (lon < minLon) minLon = lon;
+              if (lon > maxLon) maxLon = lon;
+              if (lat < minLat) minLat = lat;
+              if (lat > maxLat) maxLat = lat;
+            });
+          });
+        });
+      }
+      const centerLon = (minLon + maxLon) / 2;
+      const centerLat = (minLat + maxLat) / 2;
+      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.02);
+      return { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos };
+    }
+
+    // ----------------------------------------------------------------
+    // 초기화 및 애니메이션
+    // ----------------------------------------------------------------
+    function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(2, 2, 2);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.rotateSpeed = 0.3;
+      controls.zoomSpeed = 1.2;
+      controls.panSpeed = 1.0;
+      controls.update();
+      // 지구본 생성
+      const sphereGeometry = new THREE.SphereGeometry(globeRadius, 64, 64);
+      const textureLoader = new THREE.TextureLoader();
+      const globeTexture = textureLoader.load('eo_base_2020_clean_geo_optimized.jpg');
+      const sphereMaterial = new THREE.MeshBasicMaterial({ map: globeTexture });
+      globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      scene.add(globeMesh);
+      // countries.geojson 로드
+      fetch('countries.geojson')
+        .then(response => response.json())
+        .then(data => {
+          countryGeoJSON = data;
+          document.getElementById('iso-code').value = "south korea";
+          searchCountries(); // 초기 로딩 시 한국 표시
+        })
+        .catch(err => console.error('GeoJSON 로드 실패:', err));
+      animate();
+    }
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+      TWEEN.update(time);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // ----------------------------------------------------------------
+    // 검색 및 국가 표시
+    // ----------------------------------------------------------------
+    function searchCountries() {
+      const searchTerm = document.getElementById('iso-code').value.trim().toLowerCase();
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = "";
+      if (!countryGeoJSON) {
+        alert("GeoJSON 데이터가 아직 로드되지 않았습니다.");
+        return;
+      }
+      const matches = countryGeoJSON.features.filter(feature => {
+        return getCountryName(feature).toLowerCase().includes(searchTerm);
+      });
+      if (matches.length === 0) {
+        resultsDiv.innerHTML = "<div>검색 결과가 없습니다.</div>";
+        return;
+      }
+      if (matches.length === 1) {
+        document.getElementById('iso-code').value = getCountryName(matches[0]);
+        displayCountry(matches[0]);
+        resultsDiv.innerHTML = "";
+      } else {
+        matches.forEach(feature => {
+          const div = document.createElement('div');
+          div.className = "result-item";
+          const iso2 = getISO2(feature) || "??";
+          div.textContent = `${getCountryName(feature)} (${iso2})`;
+          div.addEventListener('click', () => {
+            displayCountry(feature);
+            resultsDiv.innerHTML = "";
+            document.getElementById('iso-code').value = getCountryName(feature);
+          });
+          resultsDiv.appendChild(div);
+        });
+      }
+    }
+
+    function displayCountry(feature) {
+      drawCountryBoundary(feature);
+      const iso2 = getISO2(feature) || "??";
+      createFlagShape(feature, iso2)
+        .then(flagMesh => {
+          removeOldFlagMesh();
+          currentFlagMesh = flagMesh;
+          scene.add(currentFlagMesh);
+          // 디버그용 BoxHelper 추가
+          const boxHelper = new THREE.BoxHelper(currentFlagMesh, 0xff00ff);
+          scene.add(boxHelper);
+          console.log("BoxHelper added to scene for debugging.");
+        })
+        .catch(err => console.warn("국기 Shape 생성 실패:", err));
+      // 카메라 이동 (bbox 중심 사용)
+      const { centerPos } = getBoundsCenter(feature);
+      new TWEEN.Tween(camera.position)
+        .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .onComplete(() => {
+          controls.target.copy(centerPos);
+          controls.update();
+        })
+        .start();
+    }
+
+    // ----------------------------------------------------------------
+    // 경계선(Line) 표시 (South Korea는 항상 유지)
+    // ----------------------------------------------------------------
+    function drawCountryBoundary(feature) {
+      const isoA3 = feature.properties.ISO_A3;
+      const lineColor = (isoA3 === "KOR") ? 0x0000ff : 0xff0000;
+      if (isoA3 !== "KOR" && currentBoundaryLine) {
+        scene.remove(currentBoundaryLine);
+        disposeObject(currentBoundaryLine);
+        currentBoundaryLine = null;
+      }
+      if (isoA3 === "KOR") {
+        if (!koreaBoundaryLine) {
+          koreaBoundaryLine = createBoundaryLineGroup(feature);
+          scene.add(koreaBoundaryLine);
+        }
+        return;
+      }
+      currentBoundaryLine = createBoundaryLineGroup(feature);
+      scene.add(currentBoundaryLine);
+    }
+
+    function createBoundaryLineGroup(feature) {
+      const lineGroup = new THREE.Group();
+      const geom = feature.geometry;
+      if (!geom) return lineGroup;
+      const lineColor = 0xff0000;
+      if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => {
+          const lineMesh = createBoundaryLineMesh(ring, lineColor);
+          if (lineMesh) lineGroup.add(lineMesh);
+        });
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(poly => {
+          poly.forEach(ring => {
+            const lineMesh = createBoundaryLineMesh(ring, lineColor);
+            if (lineMesh) lineGroup.add(lineMesh);
+          });
+        });
+      }
+      return lineGroup;
+    }
+
+    function createBoundaryLineMesh(ring, color) {
+      if (!ring || ring.length < 2) return null;
+      if (!ring[0].every((val, idx) => val === ring[ring.length - 1][idx])) {
+        ring.push(ring[0]);
+      }
+      const points = ring.map(([lon, lat]) => lonLatToXYZ(lon, lat, globeRadius + 0.02));
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color });
+      return new THREE.Line(geometry, material);
+    }
+
+    // 이벤트 설정
+    window.onload = init;
+    document.getElementById('searchBtn').addEventListener('click', searchCountries);
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
