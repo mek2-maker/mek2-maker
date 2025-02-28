@@ -273,7 +273,6 @@
 
       // [변경된 부분]
       // 국기 위치를 GeoJSON의 좌표(flagPos)로 직접 설정합니다.
-      meshGroup.position.copy(flagPos);
 
       // 국기 모양이 구 표면에 맞게 회전하도록 조정
       const normal = flagPos.clone().normalize();
