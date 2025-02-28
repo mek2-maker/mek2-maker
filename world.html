@@ -9,20 +9,20 @@
     body { margin: 0; overflow: hidden; }
     #overlay {
       position: absolute;
-      top: 8px;
-      left: 8px;
-      z-index: 8;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
       background: rgba(255,255,255,0.9);
-      padding: 8px;
-      border-radius: 4px;
+      padding: 10px;
+      border-radius: 5px;
       font-family: sans-serif;
-      width: 200px;
-      max-width: 50vw;
+      width: 300px;
+      max-width: 80vw;
       box-sizing: border-box;
     }
     #results {
       margin-top: 10px;
-      max-height: 100px;
+      max-height: 150px;
       overflow-y: auto;
     }
     .result-item {
@@ -198,23 +198,67 @@
     }
 
     // ----------------------------------------------------------------
+    // 새로 추가: GeoJSON에서 국기 위치로 사용할 좌표를 반환하는 함수
+    // (외곽 다각형의 첫 번째 좌표를 사용)
+    function getFlagCoords(feature) {
+      if (feature.geometry.type === 'Polygon') {
+        return feature.geometry.coordinates[0][0];
+      } else if (feature.geometry.type === 'MultiPolygon') {
+        return feature.geometry.coordinates[0][0][0];
+      }
+    }
+    function getFlagPosition(feature) {
+      const [lon, lat] = getFlagCoords(feature);
+      return lonLatToXYZ(lon, lat, globeRadius + 0.02);
+    }
+
+    // ----------------------------------------------------------------
     // (2) createFlagShape: feature에서 폴리곤 → polygonToSphereMesh 생성
     // ----------------------------------------------------------------
     async function createFlagShape(feature, iso2) {
       console.log("createFlagShape: 시작", feature, iso2);
 
-      // 국기 위치 계산에 bbox 중심이 아닌, 경계 좌표의 평균을 사용합니다.
-      const { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos } = getBoundsCenter(feature);
+      // 국기 위치를 GeoJSON의 좌표(첫번째 좌표)로 사용
+      const [flagLon, flagLat] = getFlagCoords(feature);
+      const flagPos = lonLatToXYZ(flagLon, flagLat, globeRadius + 0.02);
       
+      // UV 매핑을 위한 bbox 계산은 그대로 진행합니다.
+      const { minLon, maxLon, minLat, maxLat } = (function(){
+        let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+        const geom = feature.geometry;
+        if (geom.type === 'Polygon') {
+          geom.coordinates.forEach(ring => {
+            ring.forEach(([lon, lat]) => {
+              if (lon < minLon) minLon = lon;
+              if (lon > maxLon) maxLon = lon;
+              if (lat < minLat) minLat = lat;
+              if (lat > maxLat) maxLat = lat;
+            });
+          });
+        } else if (geom.type === 'MultiPolygon') {
+          geom.coordinates.forEach(poly => {
+            poly.forEach(ring => {
+              ring.forEach(([lon, lat]) => {
+                if (lon < minLon) minLon = lon;
+                if (lon > maxLon) maxLon = lon;
+                if (lat < minLat) minLat = lat;
+                if (lat > maxLat) maxLat = lat;
+              });
+            });
+          });
+        }
+        return { minLon, maxLon, minLat, maxLat };
+      })();
+
+      // 여기서는 국기 모양은 그대로 생성하되, 중심 좌표로 GeoJSON의 좌표(flagLon, flagLat)를 사용합니다.
       const meshGroup = new THREE.Group();
       const geom = feature.geometry;
-
       if (geom.type === 'Polygon') {
-        const mesh = polygonToSphereMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat, centerLon, centerLat });
+        const mesh = polygonToSphereMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat, centerLon: flagLon, centerLat: flagLat });
         if (mesh) meshGroup.add(mesh);
       } else if (geom.type === 'MultiPolygon') {
         geom.coordinates.forEach(polyCoords => {
-          const mesh = polygonToSphereMesh(polyCoords, { minLon, maxLon, minLat, maxLat, centerLon, centerLat });
+          const mesh = polygonToSphereMesh(polyCoords, { minLon, maxLon, minLat, maxLat, centerLon: flagLon, centerLat: flagLat });
           if (mesh) meshGroup.add(mesh);
         });
       }
@@ -228,11 +272,11 @@
       });
 
       // [변경된 부분]
-      // 국기 위치를 경계 좌표의 평균( getBoundsCenter에서 계산된 centerPos )으로 일치시키기 위해
-      // meshGroup.position.copy(centerPos); 코드는 제거합니다.
-      // (이미 polygonToSphereMesh 함수 내에서 절대 좌표로 계산되어 배치됨)
+      // 국기 위치를 GeoJSON의 좌표(flagPos)로 직접 설정합니다.
+      meshGroup.position.copy(flagPos);
 
-      const normal = centerPos.clone().normalize();
+      // 국기 모양이 구 표면에 맞게 회전하도록 조정
+      const normal = flagPos.clone().normalize();
       let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
       if (tangent.length() < 0.0001) {
         tangent = new THREE.Vector3(0, -normal.z, normal.y);
@@ -248,11 +292,10 @@
     }
 
     // ----------------------------------------------------------------
-    // (3) 바운딩박스 & 중심 계산 (경계 좌표의 평균 사용)
+    // (3) 바운딩박스 & 중심 계산 (기존 bbox 방식 사용)
     // ----------------------------------------------------------------
     function getBoundsCenter(feature) {
       let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
-      let totalLon = 0, totalLat = 0, count = 0;
       const geom = feature.geometry;
       if (geom.type === 'Polygon') {
         geom.coordinates.forEach(ring => {
@@ -261,9 +304,6 @@
             if (lon > maxLon) maxLon = lon;
             if (lat < minLat) minLat = lat;
             if (lat > maxLat) maxLat = lat;
-            totalLon += lon;
-            totalLat += lat;
-            count++;
           });
         });
       } else if (geom.type === 'MultiPolygon') {
@@ -274,17 +314,15 @@
               if (lon > maxLon) maxLon = lon;
               if (lat < minLat) minLat = lat;
               if (lat > maxLat) maxLat = lat;
-              totalLon += lon;
-              totalLat += lat;
-              count++;
             });
           });
         });
       }
-      const avgLon = totalLon / count;
-      const avgLat = totalLat / count;
-      const centerPos = lonLatToXYZ(avgLon, avgLat, globeRadius + 0.02);
-      return { minLon, maxLon, minLat, maxLat, centerLon: avgLon, centerLat: avgLat, centerPos };
+      // 기존 bbox 중심 계산 (평균)
+      const centerLon = (minLon + maxLon) / 2;
+      const centerLat = (minLat + maxLat) / 2;
+      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.02);
+      return { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos };
     }
 
     // ----------------------------------------------------------------
@@ -394,7 +432,7 @@
         .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
         .onComplete(() => {
-          controls.target.set(0, 0, 0);
+          controls.target.copy(centerPos);
           controls.update();
         })
         .start();
