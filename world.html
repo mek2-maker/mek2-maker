@@ -292,36 +292,11 @@
 
     // ----------------------------------------------------------------
     // (3) 바운딩박스 & 중심 계산 (기존 bbox 방식 사용)
-    // ----------------------------------------------------------------
     function getBoundsCenter(feature) {
-      let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
-      const geom = feature.geometry;
-      if (geom.type === 'Polygon') {
-        geom.coordinates.forEach(ring => {
-          ring.forEach(([lon, lat]) => {
-            if (lon < minLon) minLon = lon;
-            if (lon > maxLon) maxLon = lon;
-            if (lat < minLat) minLat = lat;
-            if (lat > maxLat) maxLat = lat;
-          });
-        });
-      } else if (geom.type === 'MultiPolygon') {
-        geom.coordinates.forEach(poly => {
-          poly.forEach(ring => {
-            ring.forEach(([lon, lat]) => {
-              if (lon < minLon) minLon = lon;
-              if (lon > maxLon) maxLon = lon;
-              if (lat < minLat) minLat = lat;
-              if (lat > maxLat) maxLat = lat;
-            });
-          });
-        });
-      }
-      // 기존 bbox 중심 계산 (평균)
-      const centerLon = (minLon + maxLon) / 2;
-      const centerLat = (minLat + maxLat) / 2;
+      const centroid = turf.centroid(feature);
+      const [centerLon, centerLat] = centroid.geometry.coordinates;
       const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.02);
-      return { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos };
+      return { centerLon, centerLat, centerPos };
     }
 
     // ----------------------------------------------------------------
