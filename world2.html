@@ -116,7 +116,7 @@
           i === 0 ? shape.moveTo(point.x, point.y) : shape.lineTo(point.x, point.y);
         });
 
-        const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.005, bevelEnabled: false });
+        const geometry = new THREE.ShapeGeometry(shape);
         const material = new THREE.MeshBasicMaterial({
           map: flagTexture, side: THREE.DoubleSide, transparent: true, opacity: 0.9
         });
@@ -128,6 +128,21 @@
       } catch (error) {
         console.warn("국기 텍스처 로드 실패:", error);
       }
+    }
+
+    function drawCountryBoundary(feature) {
+      if (currentBoundaryLine) {
+        scene.remove(currentBoundaryLine);
+        disposeObject(currentBoundaryLine);
+        currentBoundaryLine = null;
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      const points = feature.geometry.coordinates[0].map(([lon, lat]) => lonLatToXYZ(lon, lat, globeRadius + 0.01));
+      geometry.setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+      currentBoundaryLine = new THREE.LineLoop(geometry, material);
+      scene.add(currentBoundaryLine);
     }
 
     function init() {
@@ -181,15 +196,15 @@
     }
 
     function displayCountry(feature) {
-      const iso2 = getISO2(feature) || "??";
-      fillCountryWithFlag(feature, iso2);
+      drawCountryBoundary(feature);
+      fillCountryWithFlag(feature, getISO2(feature) || "??");
 
       const centerPos = getBoundsCenter(feature);
       new TWEEN.Tween(camera.position)
         .to({ x: centerPos.x * 2, y: centerPos.y * 2, z: centerPos.z * 2 }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
         .start();
-      controls.target.copy(centerPos);
+      controls.target.set(0, 0, 0);
       controls.update();
     }
 
