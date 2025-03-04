@@ -195,78 +195,55 @@
     // (2) createFlagShape: 국기 모양은 기존 방식 그대로, 위치는 bbox 중심을 사용
     // ----------------------------------------------------------------
     async function createFlagShape(feature, iso2) {
-      console.log("createFlagShape: 시작", feature, iso2);
-      
-      // bbox 중심을 계산하여 국기 위치로 사용합니다.
-      // getBoundsCenter()는 모든 좌표의 단순 평균(경계 bbox의 중심)을 구합니다.
-      const { centerLon, centerLat, centerPos } = getBoundsCenter(feature);
-      
-      // UV 매핑을 위한 bbox 계산은 그대로 진행합니다.
-      const { minLon, maxLon, minLat, maxLat } = (function(){
-        let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+        console.log("createFlagShape: 시작", feature, iso2);
+        
+        const { centerLon, centerLat, centerPos } = getBoundsCenter(feature);
+        
+        const { minLon, maxLon, minLat, maxLat } = (() => {
+            let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+            feature.geometry.coordinates.flat(2).forEach(([lon, lat]) => {
+                minLon = Math.min(minLon, lon);
+                maxLon = Math.max(maxLon, lon);
+                minLat = Math.min(minLat, lat);
+                maxLat = Math.max(maxLat, lat);
+            });
+            return { minLon, maxLon, minLat, maxLat };
+        })();
+    
+        const meshGroup = new THREE.Group();
         const geom = feature.geometry;
+    
         if (geom.type === 'Polygon') {
-          geom.coordinates.forEach(ring => {
-            ring.forEach(([lon, lat]) => {
-              if (lon < minLon) minLon = lon;
-              if (lon > maxLon) maxLon = lon;
-              if (lat < minLat) minLat = lat;
-              if (lat > maxLat) maxLat = lat;
-            });
-          });
+            const mesh = polygonToSphereMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat, centerLon, centerLat });
+            if (mesh) meshGroup.add(mesh);
         } else if (geom.type === 'MultiPolygon') {
-          geom.coordinates.forEach(poly => {
-            poly.forEach(ring => {
-              ring.forEach(([lon, lat]) => {
-                if (lon < minLon) minLon = lon;
-                if (lon > maxLon) maxLon = lon;
-                if (lat < minLat) minLat = lat;
-                if (lat > maxLat) maxLat = lat;
-              });
+            geom.coordinates.forEach(polyCoords => {
+                const mesh = polygonToSphereMesh(polyCoords, { minLon, maxLon, minLat, maxLat, centerLon, centerLat });
+                if (mesh) meshGroup.add(mesh);
             });
-          });
         }
-        return { minLon, maxLon, minLat, maxLat };
-      })();
-
-      // 국기 모양 생성 시, polygonToSphereMesh()에 bbox 중심을 기준으로 전달합니다.
-      const meshGroup = new THREE.Group();
-      const geom = feature.geometry;
-      if (geom.type === 'Polygon') {
-        const mesh = polygonToSphereMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat, centerLon, centerLat });
-        if (mesh) meshGroup.add(mesh);
-      } else if (geom.type === 'MultiPolygon') {
-        geom.coordinates.forEach(polyCoords => {
-          const mesh = polygonToSphereMesh(polyCoords, { minLon, maxLon, minLat, maxLat, centerLon, centerLat });
-          if (mesh) meshGroup.add(mesh);
+    
+        const flagTex = await loadFlagTexture(iso2);
+        meshGroup.traverse(obj => {
+            if (obj.isMesh) {
+                obj.material.map = flagTex;
+                obj.material.needsUpdate = true;
+            }
         });
-      }
-      const flagTex = await loadFlagTexture(iso2);
-      meshGroup.traverse(obj => {
-        if (obj.isMesh) {
-          obj.material.map = flagTex;
-          obj.material.needsUpdate = true;
+    
+        const normal = centerPos.clone().normalize();
+        let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
+        if (tangent.length() < 0.0001) {
+            tangent = new THREE.Vector3(0, -normal.z, normal.y);
         }
-      });
-      
-      // 국기 위치는 이미 polygonToSphereMesh() 함수 내에서 계산된 좌표를 사용하므로,
-      // 추가적인 translation 없이 그대로 두면 경계선과 일치합니다.
-      // 따라서 meshGroup.position 설정은 제거합니다.
-      
-      // 국기 모양이 구 표면에 맞게 회전하도록 조정
-      const normal = centerPos.clone().normalize();
-      let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
-      if (tangent.length() < 0.0001) {
-        tangent = new THREE.Vector3(0, -normal.z, normal.y);
-      }
-      tangent.normalize();
-      const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
-      const basis = new THREE.Matrix4();
-      basis.makeBasis(tangent, bitangent, normal);
-      meshGroup.setRotationFromMatrix(basis);
-      
-      console.log("createFlagShape: 최종 meshGroup", meshGroup);
-      return meshGroup;
+        tangent.normalize();
+        const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+        const basis = new THREE.Matrix4();
+        basis.makeBasis(tangent, bitangent, normal);
+        meshGroup.setRotationFromMatrix(basis);
+        
+        console.log("createFlagShape: 최종 meshGroup", meshGroup);
+        return meshGroup;
     }
 
     // ----------------------------------------------------------------
