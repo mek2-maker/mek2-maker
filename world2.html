@@ -169,74 +169,68 @@
     // (2) createFlagShape: plain 국기 플레인을 해당 국가 bbox 중심에 배치하고, 
     // 국가 경계에 맞게 마스크(알파맵)를 적용합니다.
     // ----------------------------------------------------------------
-    async function createFlagShape(feature, iso2) {
-      console.log("createFlagShape: 시작", feature, iso2);
-      
-      // bbox 중심 계산 (국기 위치 기준)
-      const { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos } = getBoundsCenter(feature);
-      
-      // 국기 텍스처 로드
-      const flagTex = await loadFlagTexture(iso2);
-      
-      // 마스크 생성: canvas에 국가 경계(bbox 기준)를 그림
-      const canvas = document.createElement('canvas');
-      canvas.width = 512;
-      canvas.height = 512;
-      const ctx = canvas.getContext('2d');
-      // 배경은 검정색(투명하게 처리)
-      ctx.fillStyle = 'black';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      // 폴리곤을 흰색으로 그려 마스크로 사용
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      
-      let coords;
-      if (feature.geometry.type === 'Polygon') {
-        coords = feature.geometry.coordinates[0];
-      } else if (feature.geometry.type === 'MultiPolygon') {
-        coords = feature.geometry.coordinates[0][0];
+  async function fillCountryWithFlag(feature, iso2) {
+      if (!feature.geometry) return;
+  
+      // 기존 색칠된 Mesh 제거
+      if (currentFlagMesh) {
+          scene.remove(currentFlagMesh);
+          disposeObject(currentFlagMesh);
+          currentFlagMesh = null;
       }
-      // 각 좌표를 canvas UV로 변환: 
-      // u = (lon - minLon) / (maxLon - minLon) * canvas.width
-      // v = canvas.height - ((lat - minLat) / (maxLat - minLat) * canvas.height)
-      coords.forEach((pt, i) => {
-        const [lon, lat] = pt;
-        const u = ((lon - minLon) / (maxLon - minLon)) * canvas.width;
-        const v = canvas.height - (((lat - minLat) / (maxLat - minLat)) * canvas.height);
-        if(i === 0) ctx.moveTo(u, v);
-        else ctx.lineTo(u, v);
-      });
-      ctx.closePath();
-      ctx.fill();
-      
-      const maskTex = new THREE.CanvasTexture(canvas);
-      maskTex.needsUpdate = true;
-      
-      // 플레인 국기 생성: 플레인 크기는 bbox 크기에 비례하도록 조정 (scale factor 필요)
-      const scaleFactor = 0.01; // 필요에 따라 조정
-      const flagWidth = (maxLon - minLon) * scaleFactor;
-      const flagHeight = (maxLat - minLat) * scaleFactor;
-      const geometry = new THREE.PlaneGeometry(flagWidth, flagHeight);
-      const material = new THREE.MeshBasicMaterial({
-        map: flagTex,
-        alphaMap: maskTex,
-        transparent: true
-      });
-      const flagMesh = new THREE.Mesh(geometry, material);
-      
-      // 국기 플레인을 bbox 중심(centerPos)에 배치
-      flagMesh.position.copy(centerPos);
-      
-      // 국기 플레인의 기본 노말은 (0, 0, 1)입니다.
-      // 구 표면의 노말은 centerPos의 정규화 값이므로, 두 벡터를 맞추기 위해 회전시킵니다.
-      const normal = centerPos.clone().normalize();
-      const quaternion = new THREE.Quaternion();
-      quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-      flagMesh.setRotationFromQuaternion(quaternion);
-      
-      console.log("createFlagShape: 최종 flagMesh", flagMesh);
-      return flagMesh;
-    }
+  
+      // 국기 텍스처 로드
+      try {
+          const flagTexture = await loadFlagTexture(iso2);
+          flagTexture.wrapS = THREE.RepeatWrapping;
+          flagTexture.wrapT = THREE.RepeatWrapping;
+  
+          // 폴리곤 생성
+          const shape = new THREE.Shape();
+          let polygons = [];
+  
+          if (feature.geometry.type === "Polygon") {
+              polygons = [feature.geometry.coordinates];
+          } else if (feature.geometry.type === "MultiPolygon") {
+              polygons = feature.geometry.coordinates;
+          }
+  
+          // 첫 번째 외곽 경계선 적용
+          polygons.forEach((polygon) => {
+              shape.moveTo(...lonLatToXYZ(polygon[0][0][0], polygon[0][0][1]).toArray());
+              polygon[0].forEach(([lon, lat]) => {
+                  const point = lonLatToXYZ(lon, lat);
+                  shape.lineTo(point.x, point.y);
+              });
+          });
+  
+          // 내부를 채울 ShapeGeometry 생성
+          const geometry = new THREE.ShapeGeometry(shape);
+          const material = new THREE.MeshBasicMaterial({ 
+              map: flagTexture, 
+              side: THREE.DoubleSide, 
+              transparent: true, 
+              opacity: 0.9 
+          });
+          const countryMesh = new THREE.Mesh(geometry, material);
+  
+          // 국기 플레인을 국가의 중심에 배치
+          const { centerPos } = getBoundsCenter(feature);
+          countryMesh.position.copy(centerPos);
+  
+          // 표면 정렬
+          const normal = centerPos.clone().normalize();
+          const quaternion = new THREE.Quaternion();
+          quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+          countryMesh.setRotationFromQuaternion(quaternion);
+  
+          // 씬에 추가
+          scene.add(countryMesh);
+          currentFlagMesh = countryMesh;
+      } catch (error) {
+          console.warn("국기 텍스처 로드 실패:", error);
+      }
+  }
 
     // ----------------------------------------------------------------
     // 초기화 및 애니메이션
@@ -320,6 +314,7 @@
     function displayCountry(feature) {
       drawCountryBoundary(feature);
       const iso2 = getISO2(feature) || "??";
+      fillCountryWithFlag(feature, iso2);
       createFlagShape(feature, iso2)
         .then(flagMesh => {
           removeOldFlagMesh();
