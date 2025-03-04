@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>3D 국기 - Korea</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0xffffff);
+        document.body.appendChild(renderer.domElement);
+
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(0, 0, 1).normalize();
+        scene.add(light);
+
+        const textureLoader = new THREE.TextureLoader();
+        const flagTexture = textureLoader.load("https://mek2-maker.github.io/mek2-maker/flag/KR.jpg"); // ✅ 국기 URL 적용
+
+        const geometry = new THREE.PlaneGeometry(3, 2, 30, 30);
+        const material = new THREE.MeshLambertMaterial({ map: flagTexture, side: THREE.DoubleSide });
+        const flag = new THREE.Mesh(geometry, material);
+        scene.add(flag);
+
+        camera.position.z = 2;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = Date.now() * 0.002;
+            const positionAttribute = flag.geometry.attributes.position;
+            for (let i = 0; i < positionAttribute.count; i++) {
+                const x = positionAttribute.getX(i);
+                const z = Math.sin(x * 2 + time) * 0.1;
+                positionAttribute.setZ(i, z);
+            }
+            positionAttribute.needsUpdate = true;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+
+            camera.position.x = 0;
+            camera.position.y = 0;
+        });
+    </script>
+</body>
+</html>
