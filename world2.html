@@ -169,68 +169,67 @@
     // (2) createFlagShape: plain 국기 플레인을 해당 국가 bbox 중심에 배치하고, 
     // 국가 경계에 맞게 마스크(알파맵)를 적용합니다.
     // ----------------------------------------------------------------
-  async function fillCountryWithFlag(feature, iso2) {
-      if (!feature.geometry) return;
-  
-      // 기존 색칠된 Mesh 제거
-      if (currentFlagMesh) {
-          scene.remove(currentFlagMesh);
-          disposeObject(currentFlagMesh);
-          currentFlagMesh = null;
-      }
-  
-      // 국기 텍스처 로드
-      try {
-          const flagTexture = await loadFlagTexture(iso2);
-          flagTexture.wrapS = THREE.RepeatWrapping;
-          flagTexture.wrapT = THREE.RepeatWrapping;
-  
-          // 폴리곤 생성
-          const shape = new THREE.Shape();
-          let polygons = [];
-  
-          if (feature.geometry.type === "Polygon") {
-              polygons = [feature.geometry.coordinates];
-          } else if (feature.geometry.type === "MultiPolygon") {
-              polygons = feature.geometry.coordinates;
-          }
-  
-          // 첫 번째 외곽 경계선 적용
-          polygons.forEach((polygon) => {
-              shape.moveTo(...lonLatToXYZ(polygon[0][0][0], polygon[0][0][1]).toArray());
-              polygon[0].forEach(([lon, lat]) => {
-                  const point = lonLatToXYZ(lon, lat);
-                  shape.lineTo(point.x, point.y);
-              });
-          });
-  
-          // 내부를 채울 ShapeGeometry 생성
-          const geometry = new THREE.ShapeGeometry(shape);
-          const material = new THREE.MeshBasicMaterial({ 
-              map: flagTexture, 
-              side: THREE.DoubleSide, 
-              transparent: true, 
-              opacity: 0.9 
-          });
-          const countryMesh = new THREE.Mesh(geometry, material);
-  
-          // 국기 플레인을 국가의 중심에 배치
-          const { centerPos } = getBoundsCenter(feature);
-          countryMesh.position.copy(centerPos);
-  
-          // 표면 정렬
-          const normal = centerPos.clone().normalize();
-          const quaternion = new THREE.Quaternion();
-          quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-          countryMesh.setRotationFromQuaternion(quaternion);
-  
-          // 씬에 추가
-          scene.add(countryMesh);
-          currentFlagMesh = countryMesh;
-      } catch (error) {
-          console.warn("국기 텍스처 로드 실패:", error);
-      }
-  }
+    async function fillCountryWithFlag(feature, iso2) {
+        if (!feature.geometry) return;
+    
+        // 기존 색칠된 Mesh 제거
+        if (currentFlagMesh) {
+            scene.remove(currentFlagMesh);
+            disposeObject(currentFlagMesh);
+            currentFlagMesh = null;
+        }
+    
+        try {
+            const flagTexture = await loadFlagTexture(iso2);
+            flagTexture.wrapS = THREE.RepeatWrapping;
+            flagTexture.wrapT = THREE.RepeatWrapping;
+    
+            let shape = new THREE.Shape();
+            let polygons = [];
+    
+            if (feature.geometry.type === "Polygon") {
+                polygons = [feature.geometry.coordinates];
+            } else if (feature.geometry.type === "MultiPolygon") {
+                polygons = feature.geometry.coordinates;
+            }
+    
+            polygons.forEach((polygon) => {
+                shape.moveTo(...lonLatToXYZ(polygon[0][0][0], polygon[0][0][1]).toArray());
+                polygon[0].forEach(([lon, lat]) => {
+                    const point = lonLatToXYZ(lon, lat);
+                    shape.lineTo(point.x, point.y);
+                });
+            });
+    
+            // 국기 텍스처를 적용한 내부 Mesh 생성
+            const geometry = new THREE.ShapeGeometry(shape);
+            const material = new THREE.MeshBasicMaterial({
+                map: flagTexture,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.9
+            });
+            const countryMesh = new THREE.Mesh(geometry, material);
+    
+            // 국가 중심을 기반으로 위치 조정
+            const { centerPos } = getBoundsCenter(feature);
+            countryMesh.position.copy(centerPos);
+    
+            // 구형 표면과 정렬
+            const normal = centerPos.clone().normalize();
+            const quaternion = new THREE.Quaternion();
+            quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+            countryMesh.setRotationFromQuaternion(quaternion);
+    
+            // 씬에 추가
+            scene.add(countryMesh);
+            currentFlagMesh = countryMesh;
+    
+        } catch (error) {
+            console.warn("국기 텍스처 로드 실패:", error);
+        }
+    }
+
 
     // ----------------------------------------------------------------
     // 초기화 및 애니메이션
@@ -312,53 +311,55 @@
     }
 
     function displayCountry(feature) {
-      drawCountryBoundary(feature);
-      const iso2 = getISO2(feature) || "??";
-      fillCountryWithFlag(feature, iso2);
-      createFlagShape(feature, iso2)
-        .then(flagMesh => {
-          removeOldFlagMesh();
-          currentFlagMesh = flagMesh;
-          scene.add(currentFlagMesh);
-          // 디버그용 BoxHelper 추가
-          const boxHelper = new THREE.BoxHelper(currentFlagMesh, 0xff00ff);
-          scene.add(boxHelper);
-          console.log("BoxHelper added to scene for debugging.");
-        })
-        .catch(err => console.warn("국기 Shape 생성 실패:", err));
-      // 카메라 이동 (bbox 중심 사용)
-      const { centerPos } = getBoundsCenter(feature);
-      new TWEEN.Tween(camera.position)
-        .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
-        .easing(TWEEN.Easing.Quadratic.Out)
-        .onComplete(() => {
-          controls.target.set(0,0,0);
-          controls.update();
-        })
-        .start();
+        drawCountryBoundary(feature);
+        const iso2 = getISO2(feature) || "??";
+        fillCountryWithFlag(feature, iso2);
+    
+        // 카메라 이동 (국가 중심)
+        const { centerPos } = getBoundsCenter(feature);
+        new TWEEN.Tween(camera.position)
+            .to({ x: centerPos.x * 2, y: centerPos.y * 2, z: centerPos.z * 2 }, 1000)
+            .easing(TWEEN.Easing.Quadratic.Out)
+            .start();
+    
+        controls.target.copy(centerPos);
+        controls.update();
     }
 
     // ----------------------------------------------------------------
     // 경계선(Line) 표시 (South Korea는 항상 유지)
     // ----------------------------------------------------------------
     function drawCountryBoundary(feature) {
-      const isoA3 = feature.properties.ISO_A3;
-      const lineColor = (isoA3 === "KOR") ? 0x0000ff : 0xff0000;
-      if (isoA3 !== "KOR" && currentBoundaryLine) {
-        scene.remove(currentBoundaryLine);
-        disposeObject(currentBoundaryLine);
-        currentBoundaryLine = null;
-      }
-      if (isoA3 === "KOR") {
-        if (!koreaBoundaryLine) {
-          koreaBoundaryLine = createBoundaryLineGroup(feature);
-          scene.add(koreaBoundaryLine);
+        if (currentBoundaryLine) {
+            scene.remove(currentBoundaryLine);
+            disposeObject(currentBoundaryLine);
+            currentBoundaryLine = null;
         }
-        return;
-      }
-      currentBoundaryLine = createBoundaryLineGroup(feature);
-      scene.add(currentBoundaryLine);
+    
+        if (!feature.geometry || !feature.geometry.coordinates) {
+            console.warn("경계선 데이터가 없습니다.");
+            return;
+        }
+    
+        let points = [];
+        feature.geometry.coordinates[0].forEach(([lon, lat]) => {
+            const point = lonLatToXYZ(lon, lat, globeRadius + 0.01);
+            if (!isNaN(point.x) && !isNaN(point.y) && !isNaN(point.z)) {
+                points.push(point);
+            }
+        });
+    
+        if (points.length === 0) {
+            console.warn("유효한 경계선 포인트가 없습니다.");
+            return;
+        }
+    
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+        currentBoundaryLine = new THREE.LineLoop(geometry, material);
+        scene.add(currentBoundaryLine);
     }
+
 
     function createBoundaryLineGroup(feature) {
       const lineGroup = new THREE.Group();
