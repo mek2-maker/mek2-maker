@@ -19,16 +19,14 @@
       padding: 10px 0;
     }
     .clock-box {
-      border: 3px solid #007bff;
-      padding: 10px;
-      border-radius: 10px;
-      width: 20%;
-      min-width: 100px;
-      background-color: #ffffff !important;
-      box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+      width: 40%;           /* 창 너비에 따라 비율로 지정 */
+      padding: 2vw;         /* 창 크기에 따른 여백 (뷰포트 너비의 2%) */
+      border: 0.3vw solid #007bff; /* 테두리도 뷰포트 단위로 지정 */
+      border-radius: 1vw;
+      /* min-width 삭제 */
     }
     .clock-box p {
-      font-size: 10px; /* 원하는 글자 크기로 설정 */
+      font-size: calc(1vw + 1vh);  /* 뷰포트에 비례해서 글자 크기가 조정됨 */
     }
     .map-container {
       position: relative;
