@@ -12,21 +12,31 @@
       margin: 20px;
     }
     .clock-container {
-      display: flex;
-      justify-content: center;
-      gap: 30px;
-      flex-wrap: wrap;
-      padding: 10px 0;
+      display: flex;                /* 가로로 배치 */
+      flex-wrap: wrap;              /* 화면이 좁으면 다음 줄로 자동 넘어감 */
+      justify-content: center;      /* 가로 중앙 정렬 */
+      align-items: flex-start;      /* 세로 정렬 */
+      gap: 1vw;                     /* 박스 사이 가로 간격(뷰포트 단위) */
+      width: 100%;                  /* 부모 안에서 가득 차도록 */
+      margin: 0 auto;               /* 가운데 정렬 */
+      padding: 0;                   /* 세로 여백 최소화 */
     }
+    
     .clock-box {
-      width: 40%;           /* 창 너비에 따라 비율로 지정 */
-      padding: 2vw;         /* 창 크기에 따른 여백 (뷰포트 너비의 2%) */
-      border: 0.3vw solid #007bff; /* 테두리도 뷰포트 단위로 지정 */
-      border-radius: 1vw;
-      /* min-width 삭제 */
+      flex: 1 1 200px;              /* 최소 200px, 남는 공간에 맞춰 유연하게 확장 */
+      max-width: 40%;               /* 너무 커지지 않도록 최대 폭 제한 */
+      box-sizing: border-box;       
+      border: 2px solid #007bff;
+      border-radius: 1vw;           /* 모서리 둥글기 뷰포트 기준 */
+      padding: 2vw;                 /* 내부 여백(화면 크기에 따라 유동) */
+      background-color: #ffffff !important;
+      box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.2);
     }
+    
     .clock-box p {
-      font-size: calc(1vw + 1vh);  /* 뷰포트에 비례해서 글자 크기가 조정됨 */
+      margin: 0.4em 0;             /* 문단 간격 최소화 */
+      line-height: 1.2;            /* 줄 간격 */
+      font-size: calc(1rem + 0.3vw); /* 글자 크기도 뷰포트 폭에 비례하여 확장 */
     }
     .map-container {
       position: relative;
