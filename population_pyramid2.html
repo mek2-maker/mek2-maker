@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            background-color: #f4f7fa;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        #pyramid {
+            width: 100%;
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .barlayer .bars path {
+            fill-opacity: 1;
+            stroke-width: 0.5;
+            stroke: rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="pyramid"></div>
+
+    <script>
+        function getResponsiveLayout() {
+            let width = Math.min(window.innerWidth * 0.9, 500);
+            let height = Math.min(window.innerHeight * 0.7, 300);
+            let fontSize = Math.max(10, Math.min(16, width / 20));
+
+            return {
+                autosize: true,
+                width: width,
+                height: height,
+                title: { text: "연령별 인구 분포", font: { size: fontSize + 4 } },
+                xaxis: { title: "인구 수", tickfont: { size: fontSize } },
+                yaxis: { title: "연령대", tickfont: { size: fontSize } },
+                barmode: "relative"
+            };
+        }
+        // JSON 파일을 원격에서 불러오기
+        fetch('https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/population_pyramid.json')
+        .then(response => response.json())
+        .then(data => {
+            Plotly.newPlot('pyramid', data.data, data.layout).then(function() {
+                Plotly.addFrames('pyramid', data.frames);
+            });
+        })
+        .catch(error => console.error("JSON 로드 오류:", error));
+        Plotly.newPlot('pyramid', fig_pyramid.data, fig_pyramid.layout).then(function(){
+            Plotly.addFrames('pyramid', fig_pyramid.frames);
+
+            let svg = document.querySelector("#pyramid svg");
+            let defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            defs.innerHTML = `
+                <filter id="depthEffect">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
+                    <feOffset in="blur" dx="3" dy="3" result="offsetBlur"/>
+                    <feMerge>
+                        <feMergeNode in="offsetBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>`;
+            svg.prepend(defs);
+        });
+
+        let currentFrame = 0;
+        let interval = null;
+
+        function animateChart() {
+            if(interval) clearInterval(interval);
+            currentFrame = 0;
+            interval = setInterval(() => {
+                Plotly.animate('pyramid', fig_pyramid.frames[currentFrame].name, {
+                    frame: {duration: 1, redraw: true},
+                    transition: {duration: 1, easing: "ease-in-out"}
+                });
+                Plotly.relayout('pyramid', {'sliders[0].active': currentFrame});
+                currentFrame++;
+                if(currentFrame >= fig_pyramid.frames.length) clearInterval(interval);
+            }, 1);
+        }
+
+        setTimeout(() => {
+            document.querySelector("[data-title='PLAY']").onclick = animateChart;
+            document.querySelector("[data-title='PAUSE']").onclick = () => clearInterval(interval);
+        }, 1);
+    </script>
+</body>
+</html>
+
