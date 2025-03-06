@@ -8,13 +8,11 @@
             font-family: Arial, sans-serif;
             text-align: center;
         }
-
         #pyramid {
             width: 100%;
             max-width: 900px;
             margin: auto;
         }
-
         .barlayer .bars path {
             fill-opacity: 1;
             stroke-width: 0.5;
@@ -24,8 +22,8 @@
 </head>
 <body>
     <div id="pyramid"></div>
-
     <script>
+        // responsive layout 함수
         function getResponsiveLayout() {
             let width = Math.min(window.innerWidth * 0.9, 500);
             let height = Math.min(window.innerHeight * 0.7, 300);
@@ -41,32 +39,25 @@
                 barmode: "relative"
             };
         }
-        // JSON 파일을 원격에서 불러오기
+
+        // 창 크기 변경 시 레이아웃 업데이트
+        window.addEventListener('resize', function() {
+            Plotly.relayout('pyramid', getResponsiveLayout());
+        });
+
+        // JSON 파일 불러오기 및 플롯 생성
+        let fig_pyramid;
         fetch('https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/population_pyramid.json')
         .then(response => response.json())
         .then(data => {
-            Plotly.newPlot('pyramid', data.data, data.layout).then(function() {
-                Plotly.addFrames('pyramid', data.frames);
+            fig_pyramid = data;
+            Plotly.newPlot('pyramid', fig_pyramid.data, getResponsiveLayout()).then(function() {
+                Plotly.addFrames('pyramid', fig_pyramid.frames);
             });
         })
         .catch(error => console.error("JSON 로드 오류:", error));
-        Plotly.newPlot('pyramid', fig_pyramid.data, fig_pyramid.layout).then(function(){
-            Plotly.addFrames('pyramid', fig_pyramid.frames);
 
-            let svg = document.querySelector("#pyramid svg");
-            let defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-            defs.innerHTML = `
-                <filter id="depthEffect">
-                    <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
-                    <feOffset in="blur" dx="3" dy="3" result="offsetBlur"/>
-                    <feMerge>
-                        <feMergeNode in="offsetBlur"/>
-                        <feMergeNode in="SourceGraphic"/>
-                    </feMerge>
-                </filter>`;
-            svg.prepend(defs);
-        });
-
+        // 애니메이션 설정 (부드럽게, 속도 조절)
         let currentFrame = 0;
         let interval = null;
 
@@ -75,20 +66,22 @@
             currentFrame = 0;
             interval = setInterval(() => {
                 Plotly.animate('pyramid', fig_pyramid.frames[currentFrame].name, {
-                    frame: {duration: 1, redraw: true},
-                    transition: {duration: 1, easing: "ease-in-out"}
+                    frame: { duration: 100, redraw: true },
+                    transition: { duration: 100, easing: "ease-in-out" }
                 });
                 Plotly.relayout('pyramid', {'sliders[0].active': currentFrame});
                 currentFrame++;
                 if(currentFrame >= fig_pyramid.frames.length) clearInterval(interval);
-            }, 1);
+            }, 100);
         }
 
+        // 플레이/일시정지 버튼에 이벤트 연결 (버튼이 로드된 후)
         setTimeout(() => {
-            document.querySelector("[data-title='PLAY']").onclick = animateChart;
-            document.querySelector("[data-title='PAUSE']").onclick = () => clearInterval(interval);
-        }, 1);
+            let playBtn = document.querySelector("[data-title='PLAY']");
+            let pauseBtn = document.querySelector("[data-title='PAUSE']");
+            if(playBtn) playBtn.onclick = animateChart;
+            if(pauseBtn) pauseBtn.onclick = () => clearInterval(interval);
+        }, 1000);
     </script>
 </body>
 </html>
-
