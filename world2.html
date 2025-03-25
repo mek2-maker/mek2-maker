@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>3D 지구본 - 전체 국기를 마스크로 표현</title>
-  <!-- CSP 등 필요시 설정 -->
+  <!-- 필요시 CSP 설정 -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline';">
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <style>
@@ -275,7 +275,7 @@
           );
           if (geo) geometries.push(geo);
         });
-        // 수정: mergeBufferGeometries -> mergeGeometries 사용
+        // mergeBufferGeometries 대신 mergeGeometries 사용
         geometry = BufferGeometryUtils.mergeGeometries(geometries);
       }
       const flagTex = await loadFlagTexture(iso2);
@@ -283,6 +283,39 @@
       const flagMesh = new THREE.Mesh(geometry, flagMaterial);
       return flagMesh;
     }
+
+    // --- (4) getBoundsCenter 함수 ---
+    // GeoJSON 데이터를 기반으로 bbox 중심 및 국가 중심 좌표를 계산합니다.
+    function getBoundsCenter(feature) {
+      let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+      const geom = feature.geometry;
+      if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => {
+          ring.forEach(([lon, lat]) => {
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+          });
+        });
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(poly => {
+          poly.forEach(ring => {
+            ring.forEach(([lon, lat]) => {
+              if (lon < minLon) minLon = lon;
+              if (lon > maxLon) maxLon = lon;
+              if (lat < minLat) minLat = lat;
+              if (lat > maxLat) maxLat = lat;
+            });
+          });
+        });
+      }
+      const centerLon = (minLon + maxLon) / 2;
+      const centerLat = (minLat + maxLat) / 2;
+      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.02);
+      return { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos };
+    }
+
     // --- (5) 초기화 및 애니메이션 ---
     function init() {
       scene = new THREE.Scene();
