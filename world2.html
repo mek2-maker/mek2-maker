@@ -5,7 +5,7 @@
   <title>3D 지구본 - 국기 및 국가 정보 표시</title>
   <!-- CSP 등 필요시 설정 -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline';">
-  <!-- Turf.js 로드 -->
+  <!-- turf.js 전역 로드 -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; }
@@ -110,7 +110,7 @@
     function getCountryName(feature) {
       return feature.properties.ADMIN;
     }
-    // (lon, lat)를 3D 월드 좌표로 변환 (구면 좌표)
+    // (lon, lat)를 3D 좌표로 변환 (구면 좌표)
     function lonLatToXYZ(lon, lat, radius = globeRadius) {
       const phi = (90 - lat) * (Math.PI / 180);
       const theta = (lon + 180) * (Math.PI / 180);
@@ -284,7 +284,7 @@
     }
 
     // -------------------------------
-    // (6) getBoundsCenter: bbox 중심(모든 좌표의 산술 평균) 계산
+    // (6) getBoundsCenter: bbox 중심(산술 평균) 계산
     // -------------------------------
     function getBoundsCenter(feature) {
       let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
@@ -317,7 +317,7 @@
     }
 
     // -------------------------------
-    // (7) CSV 파서: 간단한 CSV 파서 함수
+    // (7) CSV 파서: 간단한 CSV 파서
     // -------------------------------
     function parseCSV(text) {
       const lines = text.split('\n').filter(line => line.trim().length > 0);
@@ -335,14 +335,12 @@
     // -------------------------------
     // (8) 정보 패널 업데이트 함수
     // -------------------------------
-    // 왼쪽 패널: 항상 대한민국 정보를 표시 (CSV에서 Country가 "South Korea" 또는 "Korea"인 행)
+    // 왼쪽 패널: 대한민국 정보를 표시
     function updateLeftPanel() {
       const leftDiv = document.getElementById('left-info');
       if (!countryInfoData) return;
-      const korea = countryInfoData.find(item => {
-        const country = item.Country.toLowerCase();
-        return country.includes("korea");
-      });
+      // CSV에서 Country 헤더의 값이 "korea"를 포함하는 행을 찾음 (헤더명이 실제와 다르다면 수정 필요)
+      const korea = countryInfoData.find(item => (item.Country || "").toLowerCase().includes("korea"));
       if (korea) {
         leftDiv.innerHTML = `<img src="./flag/${korea.ISO2}.jpg" alt="${korea.Country} 국기">
                               <strong>${korea.Country}</strong><br>
@@ -356,7 +354,8 @@
     function updateRightPanel(countryName) {
       const rightDiv = document.getElementById('right-info');
       if (!countryInfoData) return;
-      const info = countryInfoData.find(item => item.Country.toLowerCase().includes(countryName.toLowerCase()));
+      // item.Country가 없으면 빈 문자열로 처리하여 toLowerCase() 호출 에러 방지
+      const info = countryInfoData.find(item => (item.Country || "").toLowerCase().includes(countryName.toLowerCase()));
       if (info) {
         rightDiv.innerHTML = `<img src="./flag/${info.ISO2}.jpg" alt="${info.Country} 국기">
                               <strong>${info.Country}</strong><br>
@@ -382,7 +381,6 @@
       controls.zoomSpeed = 1.2;
       controls.panSpeed = 1.0;
       controls.update();
-
       // 지구본 생성
       const sphereGeometry = new THREE.SphereGeometry(globeRadius, 64, 64);
       const textureLoader = new THREE.TextureLoader();
@@ -390,7 +388,6 @@
       const sphereMaterial = new THREE.MeshBasicMaterial({ map: globeTexture });
       globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
       scene.add(globeMesh);
-
       // 국가 GeoJSON 로드
       fetch('countries.geojson')
         .then(response => response.json())
@@ -400,7 +397,6 @@
           searchCountries();
         })
         .catch(err => console.error('GeoJSON 로드 실패:', err));
-
       // CSV 국가 정보 로드
       fetch('country_info.csv')
         .then(response => response.text())
@@ -409,7 +405,6 @@
           updateLeftPanel();
         })
         .catch(err => console.error('CSV 로드 실패:', err));
-
       animate();
     }
 
@@ -472,10 +467,8 @@
           console.log("BoxHelper added for debugging.");
         })
         .catch(err => console.warn("국기 Shape 생성 실패:", err));
-
-      // 업데이트: 오른쪽 패널에 검색 국가 정보 표시
+      // 오른쪽 패널 업데이트: 검색한 국가 정보 표시
       updateRightPanel(getCountryName(feature));
-
       // 카메라 이동 (bbox 중심 사용)
       const { centerPos } = getBoundsCenter(feature);
       new TWEEN.Tween(camera.position)
