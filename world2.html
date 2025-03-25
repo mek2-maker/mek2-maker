@@ -222,7 +222,7 @@
       const center = getCenterOfFeature(feature);
       const pos = lonLatToXYZ(center.centerLon, center.centerLat, R + 0.4);
       new TWEEN.Tween(camera.position)
-        .to({ x: pos.x, y: pos.y, z: pos.z }, 1000)
+        .to({ x: pos.x*1.5, y: pos.y*1.5, z: pos.z*1.5 }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
         .onUpdate(() => controls.update())
         .start();
