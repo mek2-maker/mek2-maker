@@ -135,7 +135,7 @@
     }
 
     // --- (1) 국가 폴리곤(경계) 기반 Geometry 생성 ---
-    // 이 함수는 GeoJSON의 좌표(경도, 위도)를 earcut으로 삼각분할하고,
+    // GeoJSON 좌표(경도, 위도)를 earcut으로 삼각분할한 후
     // 각 정점에 bbox 기준 UV를 할당합니다.
     function polygonToSphereMesh(coordsArray, minLon, maxLon, minLat, maxLat, radius = globeRadius + 0.02) {
       const outerRing = coordsArray[0];
@@ -173,7 +173,7 @@
         const lat = verts2D[idx * 2 + 1];
         const pos = lonLatToXYZ(lon, lat, radius);
         positions.push(pos.x, pos.y, pos.z);
-        // UV는 bbox 기준으로 0~1로 매핑 (이 값는 셰이더에서 조정됨)
+        // UV는 bbox 기준으로 0~1 매핑
         const u = (lon - minLon) / lonRange;
         const v = (lat - minLat) / latRange;
         uvs.push(u, v);
@@ -186,10 +186,8 @@
       return geometry;
     }
 
-    // --- (2) 국기 셰이더 Material --- 
-    // 이 셰이더는 폴리곤의 UV를 받아,
-    // bbox 내에서 전체 국기 이미지를 letterbox 방식으로 보여줍니다.
-    // (u_flagAspect는 국기 이미지의 가로세로비, 예를 들어 3:2면 1.5)
+    // --- (2) 국기 셰이더 Material ---
+    // 이 셰이더는 폴리곤의 UV를 이용해 전체 국기 이미지를 letterbox 방식으로 보여줍니다.
     function createFlagShaderMaterial(flagTexture, bboxAspect, flagAspect = 1.5) {
       const material = new THREE.ShaderMaterial({
         uniforms: {
@@ -205,6 +203,7 @@
           }
         `,
         fragmentShader: `
+          precision mediump float;
           uniform sampler2D u_flagTexture;
           uniform float u_bboxAspect;
           uniform float u_flagAspect;
@@ -213,7 +212,6 @@
             // vUv는 bbox 기준 [0,1]
             vec2 centeredUV = vUv - vec2(0.5);
             vec2 adjustedUV = centeredUV;
-            // bbox의 가로세로비와 국기 이미지의 비율을 비교하여 letterbox 처리
             if(u_bboxAspect > u_flagAspect){
               float scale = u_flagAspect / u_bboxAspect;
               adjustedUV.x *= scale;
@@ -222,7 +220,6 @@
               adjustedUV.y *= scale;
             }
             vec2 finalUV = adjustedUV + vec2(0.5);
-            // finalUV가 [0,1] 범위를 벗어나면 clip
             if(finalUV.x < 0.0 || finalUV.x > 1.0 || finalUV.y < 0.0 || finalUV.y > 1.0){
               discard;
             }
@@ -235,8 +232,8 @@
     }
 
     // --- (3) 국기 Shape 생성 ---
-    // GeoJSON의 좌표를 이용해 폴리곤 geometry를 만들고,
-    // 위에서 만든 커스텀 셰이더로 국기 텍스처를 적용합니다.
+    // GeoJSON 좌표로 폴리곤 Geometry를 만들고,
+    // 위의 셰이더 Material을 적용하여 국기 Mesh를 생성합니다.
     async function createFlagShape(feature, iso2) {
       const geom = feature.geometry;
       let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
@@ -274,10 +271,8 @@
         geometry = BufferGeometryUtils.mergeBufferGeometries(geometries);
       }
       const flagTex = await loadFlagTexture(iso2);
-      // 커스텀 셰이더 Material을 생성 (여기서 u_flagAspect는 국기 이미지의 기본 비율, 예: 1.5)
       const flagMaterial = createFlagShaderMaterial(flagTex, bboxAspect, 1.5);
       const flagMesh = new THREE.Mesh(geometry, flagMaterial);
-      // geometry는 이미 월드 좌표로 만들어졌으므로 추가 변환은 없음.
       return flagMesh;
     }
 
