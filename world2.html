@@ -204,14 +204,24 @@
     function displayCountry(feature) {
       if (currentBoundaryLine) scene.remove(currentBoundaryLine);
       if (currentFillMesh) scene.remove(currentFillMesh);
-
+    
       currentBoundaryLine = drawBoundary(feature, 0xff0000);
       scene.add(currentBoundaryLine);
-
+    
       currentFillMesh = drawPolygonFill(feature, 0xff0000);
       scene.add(currentFillMesh);
-
+    
       updateRightPanel(feature.properties.ADMIN);
+    
+      // 👉 카메라 이동 추가
+      const { centerLon, centerLat } = getCenterOfFeature(feature);
+      const targetPos = lonLatToXYZ(centerLon, centerLat, R + 2);
+      new TWEEN.Tween(camera.position)
+        .to({ x: targetPos.x, y: targetPos.y, z: targetPos.z }, 1000)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .onUpdate(() => controls.update())
+        .start();
+      controls.target.copy(lonLatToXYZ(centerLon, centerLat, R));
     }
 
     window.onload = init;
