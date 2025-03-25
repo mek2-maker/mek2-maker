@@ -1,148 +1,156 @@
 <!DOCTYPE html>
 <html lang="ko">
-  <head>
+<head>
   <meta charset="UTF-8">
   <title>3D 지구본 + 국기 & 정보 패널</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline';">
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
   <style>
-    body{margin:0;overflow:hidden}
-    #overlay{position:absolute;top:10px;left:10px;background:#fff;padding:10px;border-radius:4px;font-family:sans-serif;}
-    #results{margin-top:8px;max-height:100px;overflow:auto}
-    .result-item{padding:4px;border-bottom:1px solid #ccc;cursor:pointer;}
-    .result-item:hover{background:#eee;}
-    #info-panel{position:absolute;bottom:0;left:0;width:100%;height:250px;display:flex;background:rgba(255,255,255,0.95);font-family:sans-serif;}
-    #info-panel .info{flex:1;padding:8px;text-align:center;overflow-y:auto;}
-    #info-panel img{max-width:80px;display:block;margin:0 auto 4px;}
+    body { margin: 0; overflow: hidden; }
+    #overlay { position: absolute; top: 10px; left: 10px; background: #fff; padding: 10px; border-radius: 4px; font-family: sans-serif; }
+    #results { margin-top: 8px; max-height: 100px; overflow: auto; }
+    .result-item { padding: 4px; border-bottom: 1px solid #ccc; cursor: pointer; }
+    .result-item:hover { background: #eee; }
+    #info-panel { position: absolute; bottom: 0; left: 0; width: 100%; height: 250px; display: flex; background: rgba(255,255,255,0.95); font-family: sans-serif; }
+    #info-panel .info { flex: 1; padding: 8px; text-align: center; overflow-y: auto; }
+    #info-panel img { max-width: 80px; display: block; margin: 0 auto 4px; }
   </style>
-  </head>
-  <body>
+</head>
+<body>
   <div id="overlay">
     <input id="iso-code" placeholder="국가명 입력">
     <button onclick="searchCountries()">검색</button>
     <div id="results"></div>
   </div>
+
   <div id="info-panel">
     <div id="left-info" class="info"></div>
     <div id="right-info" class="info"></div>
   </div>
-  
+
   <script type="module">
-  import * as THREE from './libs/three.module.js';
-  import { OrbitControls } from './libs/OrbitControls.js';
-  import earcut from './libs/earcut.js';
-  import TWEEN from './libs/tween.esm.js';
-  import rewind from 'https://cdn.jsdelivr.net/npm/@turf/rewind@6/esm/index.js';
-  import centroid from 'https://cdn.jsdelivr.net/npm/@turf/centroid@6/esm/index.js';
-  
-  let scene, camera, renderer, controls, geoJSON, infoData, currentBoundaryLine;
-  const R = 1;
-  
-  async function init() {
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
-    camera.position.set(2,2,2);
-    renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(innerWidth, innerHeight);
-    document.body.appendChild(renderer.domElement);
-    controls = new OrbitControls(camera, renderer.domElement);
-  
-    const globe = new THREE.Mesh(
-      new THREE.SphereGeometry(R, 64, 64),
-      new THREE.MeshBasicMaterial({map:new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg')})
-    );
-    scene.add(globe);
-  
-    geoJSON = rewind(await (await fetch('countries.geojson')).json(), {reverse:false});
-    infoData = Papa.parse(await (await fetch('country_info.csv')).text(), {header:true, skipEmptyLines:true}).data;
-    updateLeftPanel();
-    document.getElementById('iso-code').value = 'south korea';
-    searchCountries();
-  
-    animate();
-  }
-  
-  function animate(time) {
-    requestAnimationFrame(animate);
-    TWEEN.update(time);
-    controls.update();
-    renderer.render(scene, camera);
-  }
-  
-  async function loadFlag(iso) {
-    const loader = new THREE.TextureLoader();
-    for (const ext of ['gif','jpg','png']) {
-      try { return await loader.loadAsync(`./flag/${iso}.${ext}`); }
-      catch {}
+    import * as THREE from './libs/three.module.js';
+    import { OrbitControls } from './libs/OrbitControls.js';
+    import earcut from './libs/earcut.js';
+    import TWEEN from './libs/tween.esm.js';
+    import rewind from 'https://cdn.jsdelivr.net/npm/@turf/rewind@6/esm/index.js';
+    import centroid from 'https://cdn.jsdelivr.net/npm/@turf/centroid@6/esm/index.js';
+
+    let scene, camera, renderer, controls, geoJSON, infoData, currentBoundaryLine;
+    const R = 1;
+
+    async function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
+      camera.position.set(2, 2, 2);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+
+      const globe = new THREE.Mesh(
+        new THREE.SphereGeometry(R, 64, 64),
+        new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg') })
+      );
+      scene.add(globe);
+
+      geoJSON = rewind(await (await fetch('countries.geojson')).json(), { reverse: false });
+      infoData = Papa.parse(await (await fetch('country_info.csv')).text(), { header: true, skipEmptyLines: true }).data;
+
+      updateLeftPanel();
+      document.getElementById('iso-code').value = 'south korea';
+      searchCountries();
+
+      animate();
     }
-    throw new Error('Flag not found: '+iso);
-  }
-  
-  function updateLeftPanel() {
-    const left = document.getElementById('left-info');
-    const korea = infoData.find(i => (i.Name||'').toLowerCase().includes('korea'));
-    left.innerHTML = korea
-      ? `<img src="./flag/${korea.ISO2}.jpg"><strong>${korea.Name}</strong><br>수도: ${korea.Capital}<br>인구: ${korea.Population}<br>GDP: ${korea.GDP}`
-      : '대한민국 정보 없음';
-  }
-  
-  function updateRightPanel(countryName) {
-    const right = document.getElementById('right-info');
-    const info = infoData.find(i => (i.Name||'').toLowerCase().includes(countryName.toLowerCase()));
-    if (!info) return right.innerHTML = '국가 정보 없음';
-    right.innerHTML = `
-      <img src="./flag/${info.ISO2}.gif"
-           onerror="this.onerror=null; this.src='./flag/${info.ISO2}.jpg'; this.onerror=e=>e.target.src='./flag/${info.ISO2}.png';"
-           alt="${info.Name} 국기">
-      <strong>${info.Name}</strong><br>수도: ${info.Capital}<br>인구: ${info.Population}<br>GDP: ${info.GDP}`;
-  }
-  
-  async function searchCountries() {
-    const term = document.getElementById('iso-code').value.toLowerCase();
-    const feat = geoJSON.features.find(f => f.properties.ADMIN.toLowerCase().includes(term));
-    if (!feat) return alert('검색 결과 없음');
-    displayCountry(feat);
-  }
-  
-  async function displayCountry(feat) {
-    scene.children.filter(o => o.isSprite).forEach(o => scene.remove(o));
-    const ctr = centroid(feat).geometry.coordinates;
-    const pos = lonLatToXYZ(ctr[0], ctr[1], R+0.02);
-    try {
-      const tex = await loadFlag(feat.properties.ISO_A2);
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true}));
-      sprite.position.copy(pos); sprite.scale.set(0.2,0.2,0.2);
-      scene.add(sprite);
-      updateRightPanel(feat.properties.ADMIN);
-      new TWEEN.Tween(camera.position)
-        .to({x:pos.x*2.2, y:pos.y*2.2, z:pos.z*2.2}, 1000)
-        .easing(TWEEN.Easing.Quadratic.Out)
-        .onComplete(()=>{controls.target.copy(pos); controls.update();})
-        .start();
-    } catch(e) { console.warn(e.message); }
-  
-    drawBoundary(feat);
-  }
-  
-  function drawBoundary(feat) {
-    if (currentBoundaryLine) scene.remove(currentBoundaryLine);
-    const group = new THREE.Group();
-    const color = feat.properties.ISO_A3==='KOR'?0x0000ff:0xff0000;
-    const addLine = ring => {
-      const pts = ring.map(([lon,lat])=>lonLatToXYZ(lon,lat,R+0.02));
-      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({color})));
-    };
-    if (feat.geometry.type==='Polygon') feat.geometry.coordinates.forEach(addLine);
-    else feat.geometry.coordinates.flat().forEach(addLine);
-    currentBoundaryLine = group; scene.add(group);
-  }
-  
-  function lonLatToXYZ(lon, lat, r) {
-    const phi=(90-lat)*Math.PI/180, theta=(lon+180)*Math.PI/180;
-    return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(theta));
-  }
-  
-  window.onload=init;
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+      TWEEN.update(time);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    async function loadFlag(iso) {
+      const loader = new THREE.TextureLoader();
+      for (const ext of ['gif', 'jpg', 'png']) {
+        try {
+          return await loader.loadAsync(`./flag/${iso}.${ext}`);
+        } catch {}
+      }
+      throw new Error('Flag not found: ' + iso);
+    }
+
+    function updateLeftPanel() {
+      const left = document.getElementById('left-info');
+      const korea = infoData.find(i => (i.Name || '').toLowerCase().includes('korea'));
+      left.innerHTML = korea
+        ? `<img src="./flag/${korea.ISO2}.jpg"><strong>${korea.Name}</strong><br>수도: ${korea.Capital}<br>인구: ${korea.Population}<br>GDP: ${korea.GDP}`
+        : '대한민국 정보 없음';
+    }
+
+    function updateRightPanel(countryName) {
+      const right = document.getElementById('right-info');
+      const info = infoData.find(i => (i.Name || '').toLowerCase().includes(countryName.toLowerCase()));
+      right.innerHTML = info
+        ? `<img src="./flag/${info.ISO2}.gif" onerror="this.onerror=null;this.src='./flag/${info.ISO2}.jpg';this.onerror=e=>e.target.src='./flag/${info.ISO2}.png';" alt="${info.Name} 국기">
+           <strong>${info.Name}</strong><br>수도: ${info.Capital}<br>인구: ${info.Population}<br>GDP: ${info.GDP}`
+        : '국가 정보 없음';
+    }
+
+    async function searchCountries() {
+      const term = document.getElementById('iso-code').value.toLowerCase();
+      const feat = geoJSON.features.find(f => f.properties.ADMIN.toLowerCase().includes(term));
+      if (!feat) return alert('검색 결과 없음');
+      displayCountry(feat);
+    }
+
+    async function displayCountry(feat) {
+      scene.children.filter(o => o.isSprite).forEach(o => scene.remove(o));
+      const ctr = centroid(feat).geometry.coordinates;
+      const pos = lonLatToXYZ(ctr[0], ctr[1], R+0.02);
+
+      try {
+        const tex = await loadFlag(feat.properties.ISO_A2);
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+        sprite.position.copy(pos);
+        sprite.scale.set(0.2, 0.2, 0.2);
+        scene.add(sprite);
+        updateRightPanel(feat.properties.ADMIN);
+        new TWEEN.Tween(camera.position)
+          .to({ x: pos.x*2.2, y: pos.y*2.2, z: pos.z*2.2 }, 1000)
+          .easing(TWEEN.Easing.Quadratic.Out)
+          .onComplete(() => { controls.target.copy(pos); controls.update(); })
+          .start();
+      } catch(e) {
+        console.warn(e.message);
+      }
+
+      drawBoundary(feat);
+    }
+
+    function drawBoundary(feat) {
+      if (currentBoundaryLine) scene.remove(currentBoundaryLine);
+      const group = new THREE.Group();
+      const color = feat.properties.ISO_A3 === 'KOR' ? 0x0000ff : 0xff0000;
+      const addLine = ring => {
+        const pts = ring.map(([lon, lat]) => lonLatToXYZ(lon, lat, R+0.02));
+        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color })));
+      };
+      if (feat.geometry.type === 'Polygon') feat.geometry.coordinates.forEach(addLine);
+      else feat.geometry.coordinates.flat().forEach(addLine);
+      currentBoundaryLine = group;
+      scene.add(group);
+    }
+
+    function lonLatToXYZ(lon, lat, r) {
+      const phi = (90 - lat)*Math.PI/180, theta = (lon + 180)*Math.PI/180;
+      return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(theta));
+    }
+
+    window.onload = init;
 </script>
 </body>
 </html>
