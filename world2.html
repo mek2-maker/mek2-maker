@@ -12,7 +12,7 @@
   #results{margin-top:8px;max-height:100px;overflow:auto}
   .result-item{padding:4px;border-bottom:1px solid #ccc;cursor:pointer;}
   .result-item:hover{background:#eee;}
-  #info-panel{position:absolute;bottom:0;left:0;width:100%;height:140px;display:flex;background:rgba(255,255,255,0.95);font-family:sans-serif;}
+  #info-panel{position:absolute;bottom:0;left:0;width:100%;height:250px;display:flex;background:rgba(255,255,255,0.95);font-family:sans-serif;}
   #info-panel .info{flex:1;padding:8px;text-align:center;overflow-y:auto;}
   #info-panel img{max-width:80px;display:block;margin:0 auto 4px;}
 </style>
@@ -89,13 +89,27 @@ function updateLeftPanel(){
   `:'대한민국 정보 없음';
 }
 
-function updateRightPanel(name){
-  const right=document.getElementById('right-info');
-  const info=infoData.find(i=>i.Name.toLowerCase().includes(name.toLowerCase()));
-  right.innerHTML=info?`
-    <img src="./flag/${info.ISO2}.jpg"><strong>${info.Name}</strong><br>
-    수도: ${info.Capital}<br>인구: ${info.Population}<br>GDP: ${info.GDP}
-  `:'국가 정보 없음';
+function updateRightPanel(countryName) {
+  const right = document.getElementById('right-info');
+  const info = countryInfoData.find(item =>
+    (item.Name || "").toLowerCase().includes(countryName.toLowerCase())
+  );
+  if (!info) {
+    right.innerHTML = "국가 정보 없음";
+    return;
+  }
+  const iso2 = info.ISO2;
+  right.innerHTML = `
+    <img 
+      src="./flag/${iso2}.gif"
+      onerror="this.onerror=null; this.src='./flag/${iso2}.jpg'; this.onerror=(e)=>e.target.src='./flag/${iso2}.png';"
+      alt="${info.Name} 국기"
+    >
+    <strong>${info.Name}</strong><br>
+    수도: ${info.Capital || '정보 없음'}<br>
+    인구: ${info.Population || '정보 없음'}<br>
+    GDP: ${info.GDP || '정보 없음'}
+  `;
 }
 
 async function searchCountries(){
