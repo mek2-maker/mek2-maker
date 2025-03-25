@@ -260,52 +260,29 @@
       const bboxAspect = (maxLon - minLon) / (maxLat - minLat);
       let geometry;
       if (geom.type === 'Polygon') {
-        geometry = polygonToSphereMesh(geom.coordinates, minLon, maxLon, minLat, maxLat, globeRadius + 0.02);
+        geometry = polygonToSphereMesh(
+          geom.coordinates,
+          minLon, maxLon, minLat, maxLat,
+          globeRadius + 0.02
+        );
       } else if (geom.type === 'MultiPolygon') {
         const geometries = [];
         geom.coordinates.forEach(poly => {
-          const geo = polygonToSphereMesh(poly, minLon, maxLon, minLat, maxLat, globeRadius + 0.02);
+          const geo = polygonToSphereMesh(
+            poly,
+            minLon, maxLon, minLat, maxLat,
+            globeRadius + 0.02
+          );
           if (geo) geometries.push(geo);
         });
-        geometry = BufferGeometryUtils.mergeBufferGeometries(geometries);
+        // 수정: mergeBufferGeometries -> mergeGeometries 사용
+        geometry = BufferGeometryUtils.mergeGeometries(geometries);
       }
       const flagTex = await loadFlagTexture(iso2);
       const flagMaterial = createFlagShaderMaterial(flagTex, bboxAspect, 1.5);
       const flagMesh = new THREE.Mesh(geometry, flagMaterial);
       return flagMesh;
     }
-
-    // --- (4) 카메라 이동을 위한 bbox 중심 계산 ---
-    function getBoundsCenter(feature) {
-      let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
-      const geom = feature.geometry;
-      if (geom.type === 'Polygon') {
-        geom.coordinates.forEach(ring => {
-          ring.forEach(([lon, lat]) => {
-            if (lon < minLon) minLon = lon;
-            if (lon > maxLon) maxLon = lon;
-            if (lat < minLat) minLat = lat;
-            if (lat > maxLat) maxLat = lat;
-          });
-        });
-      } else if (geom.type === 'MultiPolygon') {
-        geom.coordinates.forEach(poly => {
-          poly.forEach(ring => {
-            ring.forEach(([lon, lat]) => {
-              if (lon < minLon) minLon = lon;
-              if (lon > maxLon) maxLon = lon;
-              if (lat < minLat) minLat = lat;
-              if (lat > maxLat) maxLat = lat;
-            });
-          });
-        });
-      }
-      const centerLon = (minLon + maxLon) / 2;
-      const centerLat = (minLat + maxLat) / 2;
-      const centerPos = lonLatToXYZ(centerLon, centerLat, globeRadius + 0.02);
-      return { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos };
-    }
-
     // --- (5) 초기화 및 애니메이션 ---
     function init() {
       scene = new THREE.Scene();
