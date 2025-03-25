@@ -32,8 +32,7 @@
     import { OrbitControls } from './libs/OrbitControls.js';
     import earcut from './libs/earcut.js';
     import TWEEN from './libs/tween.esm.js';
-    import rewind from 'https://unpkg.com/@turf/rewind@6.5.0/dist/module/index.js';
-    import centroid from 'https://unpkg.com/@turf/centroid@6.5.0/dist/module/index.js';
+    import { rewind, centroid } from 'https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/dist/turf.min.es.js';
 
     let scene, camera, renderer, controls, geoJSON, infoData, currentBoundaryLine;
     const R = 1;
