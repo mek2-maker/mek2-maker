@@ -40,13 +40,17 @@
     async function init() {
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
-      camera.position.set(2,2,2);
-
+      
+      const seoulPos = lonLatToXYZ(126.9780, 37.5665, R + 2);
+      camera.position.copy(seoulPos);
+      
       renderer = new THREE.WebGLRenderer({ antialias:true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
-
+      
       controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.copy(lonLatToXYZ(126.9780, 37.5665, R));
+      controls.update();
 
       const globe = new THREE.Mesh(
         new THREE.SphereGeometry(R,64,64),
