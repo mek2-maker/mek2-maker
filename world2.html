@@ -134,54 +134,54 @@
     // (1) polygonToSphereMesh: earcut를 이용해 구 표면에 맞춘 3D 폴리곤 생성  
     // 수정: 국기 Mesh를 국가 중심을 기준으로 로컬 좌표로 생성하기 위해 centerPos를 사용
     // ----------------------------------------------------------------
-    function polygonToSphereMesh(coordsArray, radius = globeRadius + 0.02) {
-      // coordsArray: [ [ [lon, lat], ... ],  // outer ring
-      //                [ [lon, lat], ... ],  // hole ring
-      //                ... ]
-      
-      // 1) earcut을 위한 2D 투영
-      //    (기존에는 centerLon, centerLat을 빼서 로컬화했지만 이제는 제거)
-      //    굳이 2D 변환할 필요가 없다면, lonLatToXYZ로 바로 삼각화할 수도 있음
-      //    여기서는 간단히 earcut용 2D만 만들고, 최종 좌표는 lonLatToXYZ로 처리
-      
-      // ... 기존 2D ring 생성 과정 ...
-      
-      // 2) earcut로 인덱스 생성 후, 각 정점을 lonLatToXYZ로 변환
+    function polygonToSphereMesh(coordsArray, { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos }, radius = globeRadius + 0.02) {
+      const outerRing = coordsArray[0];
+      if (!outerRing || outerRing.length < 3) return null;
+      const outer2D = toLocal2D(outerRing, centerLon, centerLat);
+      const hole2DArray = [];
+      for (let i = 1; i < coordsArray.length; i++) {
+        if (coordsArray[i] && coordsArray[i].length >= 3) {
+          hole2DArray.push(toLocal2D(coordsArray[i], centerLon, centerLat));
+        }
+      }
+      const verts2D = [];
+      const holeIndices = [];
+      outer2D.forEach(p => verts2D.push(p[0], p[1]));
+      let acc = outer2D.length;
+      hole2DArray.forEach(h => {
+        holeIndices.push(acc);
+        h.forEach(p => verts2D.push(p[0], p[1]));
+        acc += h.length;
+      });
+      const indices = earcut(verts2D, holeIndices, 2);
+      const geometry = new THREE.BufferGeometry();
+      const positions = [];
+      const uvs = [];
+      const degToRad = Math.PI / 180;
       for (let i = 0; i < indices.length; i++) {
         const idx = indices[i];
         const x2D = verts2D[idx * 2];
         const y2D = verts2D[idx * 2 + 1];
-        
-        // ---- 기존 코드에서 centerLon/centerLat을 더해 realLon/realLat 만든 뒤
-        //      worldPos = lonLatToXYZ(...) → localPos = worldPos.sub(centerPos)
-        //      이런 과정을 했지만, 이제는 그냥 lon/lat 자체를 바로 변환.
-        //      (혹은 earcut로 2D를 만들지 않고 ring[i]에서 직접 lonLatToXYZ)
-        
-        const realLon = /* earcut 2D -> 실제 lon 변환 */;
-        const realLat = /* earcut 2D -> 실제 lat 변환 */;
-        
+        const realLon = centerLon + (x2D / degToRad);
+        const realLat = centerLat + (y2D / degToRad);
         const worldPos = lonLatToXYZ(realLon, realLat, radius);
-        positions.push(worldPos.x, worldPos.y, worldPos.z);
-        
-        // UV 좌표는 필요하다면 minLon, maxLon 등으로 계산
-        // uvs.push(...);
+        // 로컬 좌표로 변환: 국가 중심(centerPos)을 빼줌
+        const localPos = worldPos.clone().sub(centerPos);
+        positions.push(localPos.x, localPos.y, localPos.z);
+        const u = (realLon - minLon) / (maxLon - minLon);
+        const v = (realLat - minLat) / (maxLat - minLat);
+        uvs.push(u, v);
       }
-    
-      // 3) geometry 완성 후, MeshBasicMaterial로 폴리곤 생성
-      //    여기서 별도의 회전/position 설정은 없음
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute(...);
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(positions), 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(uvs), 2));
       geometry.computeVertexNormals();
-      
       const material = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.6
       });
-      
-      const mesh = new THREE.Mesh(geometry, material);
-      return mesh;
+      return new THREE.Mesh(geometry, material);
     }
 
     // 로컬 2D 변환 함수: (lon, lat)에서 (centerLon, centerLat)를 빼고 도->라디안 변환
@@ -199,29 +199,59 @@
     // 수정: meshGroup 내의 정점들을 로컬 좌표로 구성한 후, 그룹의 position을 국가 중심으로 설정
     // ----------------------------------------------------------------
     async function createFlagShape(feature, iso2) {
-      // 1) polygonToSphereMesh를 호출해서 '절대 좌표'로 폴리곤 생성
-      const meshGroup = new THREE.Group();
-      if (geom.type === 'Polygon') {
-        const mesh = polygonToSphereMesh(geom.coordinates);
-        if (mesh) meshGroup.add(mesh);
-      } else if (geom.type === 'MultiPolygon') {
-        ...
-      }
+        console.log("createFlagShape: 시작", feature, iso2);
+        
+        const { centerLon, centerLat, centerPos } = getBoundsCenter(feature);
+        
+        const { minLon, maxLon, minLat, maxLat } = (() => {
+            let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+            feature.geometry.coordinates.flat(2).forEach(([lon, lat]) => {
+                minLon = Math.min(minLon, lon);
+                maxLon = Math.max(maxLon, lon);
+                minLat = Math.min(minLat, lat);
+                maxLat = Math.max(maxLat, lat);
+            });
+            return { minLon, maxLon, minLat, maxLat };
+        })();
     
-      // 2) 국기 텍스처만 적용
-      const flagTex = await loadFlagTexture(iso2);
-      meshGroup.traverse(obj => {
-        if (obj.isMesh) {
-          obj.material.map = flagTex;
-          obj.material.needsUpdate = true;
+        const meshGroup = new THREE.Group();
+        const geom = feature.geometry;
+    
+        if (geom.type === 'Polygon') {
+            const mesh = polygonToSphereMesh(geom.coordinates, { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos });
+            if (mesh) meshGroup.add(mesh);
+        } else if (geom.type === 'MultiPolygon') {
+            geom.coordinates.forEach(polyCoords => {
+                const mesh = polygonToSphereMesh(polyCoords, { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos });
+                if (mesh) meshGroup.add(mesh);
+            });
         }
-      });
     
-      // 3) meshGroup에 별도 이동/회전 없음
-      // meshGroup.setRotationFromMatrix(...) 제거
-      // meshGroup.position.copy(centerPos) 제거
+        const flagTex = await loadFlagTexture(iso2);
+        meshGroup.traverse(obj => {
+            if (obj.isMesh) {
+                obj.material.map = flagTex;
+                obj.material.needsUpdate = true;
+            }
+        });
     
-      return meshGroup;
+        // 국가 중심의 법선과 접선을 기준으로 회전 행렬 계산
+        const normal = centerPos.clone().normalize();
+        let tangent = new THREE.Vector3(-normal.y, normal.x, 0);
+        if (tangent.length() < 0.0001) {
+            tangent = new THREE.Vector3(0, -normal.z, normal.y);
+        }
+        tangent.normalize();
+        const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+        const basis = new THREE.Matrix4();
+        basis.makeBasis(tangent, bitangent, normal);
+        // 그룹에 회전 적용
+        meshGroup.setRotationFromMatrix(basis);
+        // 그룹의 위치를 국가 중심으로 설정
+        meshGroup.position.copy(centerPos);
+        
+        console.log("createFlagShape: 최종 meshGroup", meshGroup);
+        return meshGroup;
     }
 
     // ----------------------------------------------------------------
