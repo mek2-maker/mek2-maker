@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>3D 지구보드 + 국기 & 정보 패널</title>
+  <title>3D 지구본 + 국기 & 정보 패널</title>
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
@@ -40,17 +40,10 @@
     async function init() {
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
-      
-      const seoulPos = lonLatToXYZ(126.9780, 37.5665, R + 2);
-      camera.position.copy(seoulPos);
-      
       renderer = new THREE.WebGLRenderer({ antialias:true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
-      
       controls = new OrbitControls(camera, renderer.domElement);
-      controls.target.copy(lonLatToXYZ(126.9780, 37.5665, R));
-      controls.update();
 
       const globe = new THREE.Mesh(
         new THREE.SphereGeometry(R,64,64),
@@ -66,6 +59,13 @@
       updateLeftPanel();
 
       document.getElementById('searchBtn').onclick = searchCountries;
+
+      // 초기 카메라 위치를 대한민국 중심으로 이동
+      const center = getCenterOfFeature(korea);
+      const pos = lonLatToXYZ(center.centerLon, center.centerLat, R + 0.4);
+      camera.position.copy(pos);
+      controls.target.set(0, 0, 0);
+
       animate();
     }
 
@@ -112,49 +112,56 @@
     function drawPolygonFill(feature, colorHex) {
       const meshGroup = new THREE.Group();
       const geom = feature.geometry;
-      const center = getCenterOfFeature(feature);
-      const { minLon, maxLon, minLat, maxLat, centerLon, centerLat } = center;
+      const bounds = getCenterOfFeature(feature);
 
       const draw = coords => {
-        const outerRing = coords[0];
-        if (!outerRing || outerRing.length < 3) return;
-        const outer2D = toLocal2D(outerRing, centerLon, centerLat);
-        const hole2DArray = coords.slice(1).map(r => toLocal2D(r, centerLon, centerLat));
-        const verts2D = [];
-        const holeIndices = [];
-        outer2D.forEach(p => verts2D.push(p[0], p[1]));
-        let acc = outer2D.length;
-        hole2DArray.forEach(h => {
-          holeIndices.push(acc);
-          h.forEach(p => verts2D.push(p[0], p[1]));
-          acc += h.length;
-        });
-        const indices = earcut(verts2D, holeIndices, 2);
-        const positions = [], uvs = [];
-        const degToRad = Math.PI / 180;
-        for (let i = 0; i < indices.length; i++) {
-          const idx = indices[i];
-          const x2D = verts2D[idx*2];
-          const y2D = verts2D[idx*2+1];
-          const lon = centerLon + (x2D / degToRad);
-          const lat = centerLat + (y2D / degToRad);
-          const v3 = lonLatToXYZ(lon, lat, R + 0.01);
-          positions.push(v3.x, v3.y, v3.z);
-          const u = (lon - minLon) / (maxLon - minLon);
-          const v = (lat - minLat) / (maxLat - minLat);
-          uvs.push(u, v);
+        const outer = polygonToSphereMesh([coords[0]], bounds, R+0.01, colorHex);
+        if (outer) meshGroup.add(outer);
+
+        for (let i = 1; i < coords.length; i++) {
+          const holePoly = polygonToSphereMesh([coords[i]], bounds, R+0.01, colorHex);
+          if (holePoly) meshGroup.add(holePoly);
         }
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-        geometry.computeVertexNormals();
-        const material = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
-        meshGroup.add(new THREE.Mesh(geometry, material));
       };
 
       if (geom.type === 'Polygon') draw(geom.coordinates);
       else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(draw);
       return meshGroup;
+    }
+
+    function polygonToSphereMesh(coordsArray, bounds, radius, colorHex) {
+      const [outerRing] = coordsArray;
+      if (!outerRing || outerRing.length < 3) return null;
+
+      const { minLon, maxLon, minLat, maxLat, centerLon, centerLat } = bounds;
+      const outer2D = toLocal2D(outerRing, centerLon, centerLat);
+      const verts2D = [], indices = [], uvs = [];
+
+      outer2D.forEach(p => verts2D.push(p[0], p[1]));
+      const idx = earcut(verts2D, [], 2);
+
+      const positions = [];
+      for (let i = 0; i < idx.length; i++) {
+        const index = idx[i];
+        const x2D = verts2D[index * 2];
+        const y2D = verts2D[index * 2 + 1];
+        const lon = centerLon + (x2D / (Math.PI/180));
+        const lat = centerLat + (y2D / (Math.PI/180));
+        const v3 = lonLatToXYZ(lon, lat, radius);
+        positions.push(v3.x, v3.y, v3.z);
+
+        const u = (lon - minLon) / (maxLon - minLon);
+        const v = (lat - minLat) / (maxLat - minLat);
+        uvs.push(u, v);
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshBasicMaterial({ color: colorHex, transparent:true, opacity:0.5, side:THREE.DoubleSide });
+      return new THREE.Mesh(geometry, material);
     }
 
     function toLocal2D(ring, cLon, cLat) {
@@ -204,24 +211,21 @@
     function displayCountry(feature) {
       if (currentBoundaryLine) scene.remove(currentBoundaryLine);
       if (currentFillMesh) scene.remove(currentFillMesh);
-    
+
       currentBoundaryLine = drawBoundary(feature, 0xff0000);
-      scene.add(currentBoundaryLine);
-    
       currentFillMesh = drawPolygonFill(feature, 0xff0000);
+      scene.add(currentBoundaryLine);
       scene.add(currentFillMesh);
-    
+
       updateRightPanel(feature.properties.ADMIN);
-    
-      // 👉 카메라 이동 추가
-      const { centerLon, centerLat } = getCenterOfFeature(feature);
-      const targetPos = lonLatToXYZ(centerLon, centerLat, R + 2);
+
+      const center = getCenterOfFeature(feature);
+      const pos = lonLatToXYZ(center.centerLon, center.centerLat, R + 0.4);
       new TWEEN.Tween(camera.position)
-        .to({ x: targetPos.x, y: targetPos.y, z: targetPos.z }, 1000)
+        .to({ x: pos.x, y: pos.y, z: pos.z }, 1000)
         .easing(TWEEN.Easing.Quadratic.Out)
         .onUpdate(() => controls.update())
         .start();
-      controls.target.copy(lonLatToXYZ(centerLon, centerLat, R));
     }
 
     window.onload = init;
