@@ -81,15 +81,27 @@
       const left = document.getElementById('left-info');
       const korea = infoData.find(i => (i.Name||'').toLowerCase().includes('korea'));
       left.innerHTML = korea
-        ? `<img src="./flag/${korea.ISO2}.jpg"><strong>${korea.Name}</strong><br>수도: ${korea.Capital}<br>인구: ${korea.Population}<br>GDP: ${korea.GDP}`
+        ? `<img src="./flag/${korea.ISO2}.jpg">
+           <strong>${korea.Name}</strong><br>
+           수도: ${korea.Capital}<br>
+           면적: ${korea.Area || '정보 없음'}<br>
+           인구: ${korea.Population}<br>
+           GDP: ${korea.GDP}`
         : '대한민국 정보 없음';
     }
 
     function updateRightPanel(name) {
       const right = document.getElementById('right-info');
-      const info = infoData.find(i => (i.Name||'').toLowerCase().includes(name.toLowerCase()));
+      const info = infoData.find(i => (i.Name || '').toLowerCase().includes(name.toLowerCase()));
       right.innerHTML = info
-        ? `<img src="./flag/${info.ISO2}.gif" onerror="this.onerror=null;this.src='./flag/${info.ISO2}.jpg';this.onerror=e=>e.target.src='./flag/${info.ISO2}.png';" alt="${info.Name}"><strong>${info.Name}</strong><br>수도: ${info.Capital}<br>인구: ${info.Population}<br>GDP: ${info.GDP}`
+        ? `<img src="./flag/${info.ISO2}.gif"
+                 onerror="this.onerror=null;this.src='./flag/${info.ISO2}.jpg';this.onerror=e=>e.target.src='./flag/${info.ISO2}.png';"
+                 alt="${info.Name}">
+           <strong>${info.Name}</strong><br>
+           수도: ${info.Capital}<br>
+           면적: ${info.Area || '정보 없음'}<br>
+           인구: ${info.Population}<br>
+           GDP: ${info.GDP}`
         : '국가 정보 없음';
     }
 
