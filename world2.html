@@ -2,9 +2,8 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>3D 지구본 - 전체 국기를 마스크로 표현</title>
-  <!-- 필요시 CSP 설정 -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline';">
+  <title>3D 지구본 (turf.rewind 사용)</title>
+  <!-- Turf.js 전체 라이브러리 (v6) -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; }
@@ -47,12 +46,17 @@
     <div id="results"></div>
   </div>
 
+  <!-- Three.js, OrbitControls, TWEEN, earcut, BufferGeometryUtils를 ES 모듈로 import -->
   <script type="module">
     import * as THREE from './libs/three.module.js';
     import { OrbitControls } from './libs/OrbitControls.js';
     import TWEEN from './libs/tween.esm.js';
     import earcut from './libs/earcut.js';
     import * as BufferGeometryUtils from './libs/BufferGeometryUtils.js';
+
+    // turf.js는 <script src="...turf.min.js"></script> 로 이미 전역에 로드됨
+    // => window.turf.rewind(...) 형태나, 아래처럼 구조분해로 사용 가능
+    const { rewind } = window.turf;
 
     let scene, camera, renderer, controls;
     const globeRadius = 1;
@@ -64,7 +68,9 @@
     let currentBoundaryLine = null;
     let koreaBoundaryLine = null;
 
-    // --- 헬퍼 함수들 ---
+    // -------------------------------
+    // (1) 헬퍼 함수들
+    // -------------------------------
     function getISO2(feature) {
       const iso2 = feature.properties.ISO_A2;
       return iso2 ? iso2.trim() : null;
@@ -72,7 +78,7 @@
     function getCountryName(feature) {
       return feature.properties.ADMIN;
     }
-    // (lon, lat)를 구의 표면상의 3D 월드 좌표로 변환 (구면 좌표)
+    // (lon, lat)를 구의 표면상의 3D 좌표로 변환
     function lonLatToXYZ(lon, lat, radius = globeRadius) {
       const phi = (90 - lat) * (Math.PI / 180);
       const theta = (lon + 180) * (Math.PI / 180);
@@ -82,7 +88,9 @@
       return new THREE.Vector3(x, y, z);
     }
 
-    // 국기 텍스처 로드 (여러 확장자를 시도)
+    // -------------------------------
+    // (2) 국기 텍스처 로드
+    // -------------------------------
     function loadFlagTexture(iso2) {
       return new Promise((resolve, reject) => {
         if (iso2 === "??") {
@@ -115,7 +123,9 @@
       });
     }
 
-    // 기존 국기 Mesh 제거
+    // -------------------------------
+    // (3) Mesh 정리 함수
+    // -------------------------------
     function removeOldFlagMesh() {
       if (currentFlagMesh) {
         scene.remove(currentFlagMesh);
@@ -133,14 +143,15 @@
       });
     }
 
-    // --- (1) 국가 폴리곤(경계) 기반 Geometry 생성 ---
-    // GeoJSON 좌표(경도, 위도)를 earcut으로 삼각분할한 후
-    // 각 정점에 bbox 기준 UV를 할당합니다.
+    // -------------------------------
+    // (4) polygonToSphereMesh
+    //     (Earcut을 이용해 GeoJSON Polygon을 3D 삼각 분할)
+    // -------------------------------
     function polygonToSphereMesh(coordsArray, minLon, maxLon, minLat, maxLat, radius = globeRadius + 0.02) {
       const outerRing = coordsArray[0];
       if (!outerRing || outerRing.length < 3) return null;
 
-      // 2D 좌표(경도, 위도) 배열 생성 (earcut용)
+      // 2D 좌표(경도, 위도) 배열 (Earcut용)
       const outer2D = outerRing.map(([lon, lat]) => [lon, lat]);
       const hole2DArray = [];
       for (let i = 1; i < coordsArray.length; i++) {
@@ -148,6 +159,7 @@
           hole2DArray.push(coordsArray[i].map(([lon, lat]) => [lon, lat]));
         }
       }
+
       const verts2D = [];
       const holeIndices = [];
       outer2D.forEach(p => verts2D.push(p[0], p[1]));
@@ -172,7 +184,7 @@
         const lat = verts2D[idx * 2 + 1];
         const pos = lonLatToXYZ(lon, lat, radius);
         positions.push(pos.x, pos.y, pos.z);
-        // UV는 bbox 기준으로 0~1 매핑
+        // UV: bbox 기준으로 0~1
         const u = (lon - minLon) / lonRange;
         const v = (lat - minLat) / latRange;
         uvs.push(u, v);
@@ -185,10 +197,12 @@
       return geometry;
     }
 
-    // --- (2) 국기 셰이더 Material ---
-    // 이 셰이더는 폴리곤의 UV를 이용해 전체 국기 이미지를 letterbox 방식으로 보여줍니다.
+    // -------------------------------
+    // (5) 국기 셰이더 Material
+    // -------------------------------
+    //  - 폴리곤 UV를 bboxAspect vs. flagAspect로 letterbox 처리
     function createFlagShaderMaterial(flagTexture, bboxAspect, flagAspect = 1.5) {
-      const material = new THREE.ShaderMaterial({
+      return new THREE.ShaderMaterial({
         uniforms: {
           u_flagTexture: { value: flagTexture },
           u_bboxAspect: { value: bboxAspect },
@@ -208,9 +222,10 @@
           uniform float u_flagAspect;
           varying vec2 vUv;
           void main(){
-            // vUv는 bbox 기준 [0,1]
+            // vUv는 [0,1]
             vec2 centeredUV = vUv - vec2(0.5);
             vec2 adjustedUV = centeredUV;
+
             if(u_bboxAspect > u_flagAspect){
               float scale = u_flagAspect / u_bboxAspect;
               adjustedUV.x *= scale;
@@ -219,23 +234,26 @@
               adjustedUV.y *= scale;
             }
             vec2 finalUV = adjustedUV + vec2(0.5);
+
             if(finalUV.x < 0.0 || finalUV.x > 1.0 || finalUV.y < 0.0 || finalUV.y > 1.0){
               discard;
             }
             gl_FragColor = texture2D(u_flagTexture, finalUV);
           }
         `,
-        transparent: true,
+        transparent: true
       });
-      return material;
     }
 
-    // --- (3) 국기 Shape 생성 ---
-    // GeoJSON 좌표로 폴리곤 Geometry를 만들고,
-    // 위의 셰이더 Material을 적용하여 국기 Mesh를 생성합니다.
+    // -------------------------------
+    // (6) 국기 Shape 생성
+    // -------------------------------
+    //  - GeoJSON 좌표 → polygonToSphereMesh → ShaderMaterial 적용
     async function createFlagShape(feature, iso2) {
       const geom = feature.geometry;
       let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+
+      // bbox 계산
       if (geom.type === 'Polygon') {
         geom.coordinates.forEach(ring => {
           ring.forEach(([lon, lat]) => {
@@ -258,6 +276,8 @@
         });
       }
       const bboxAspect = (maxLon - minLon) / (maxLat - minLat);
+
+      // 폴리곤 → geometry
       let geometry;
       if (geom.type === 'Polygon') {
         geometry = polygonToSphereMesh(
@@ -275,17 +295,19 @@
           );
           if (geo) geometries.push(geo);
         });
-        // mergeBufferGeometries 대신 mergeGeometries 사용
+        // mergeBufferGeometries → mergeGeometries
         geometry = BufferGeometryUtils.mergeGeometries(geometries);
       }
+
+      // 텍스처 로드 + 셰이더 적용
       const flagTex = await loadFlagTexture(iso2);
       const flagMaterial = createFlagShaderMaterial(flagTex, bboxAspect, 1.5);
-      const flagMesh = new THREE.Mesh(geometry, flagMaterial);
-      return flagMesh;
+      return new THREE.Mesh(geometry, flagMaterial);
     }
 
-    // --- (4) getBoundsCenter 함수 ---
-    // GeoJSON 데이터를 기반으로 bbox 중심 및 국가 중심 좌표를 계산합니다.
+    // -------------------------------
+    // (7) 국가 중심 구하기
+    // -------------------------------
     function getBoundsCenter(feature) {
       let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
       const geom = feature.geometry;
@@ -316,7 +338,9 @@
       return { minLon, maxLon, minLat, maxLat, centerLon, centerLat, centerPos };
     }
 
-    // --- (5) 초기화 및 애니메이션 ---
+    // -------------------------------
+    // (8) 초기화 및 애니메이션
+    // -------------------------------
     function init() {
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -344,9 +368,14 @@
       fetch('countries.geojson')
         .then(response => response.json())
         .then(data => {
-          countryGeoJSON = data;
+          // (A) 폴리곤 링 방향 정규화(turf.rewind)
+          //     외곽 링은 반시계, 홀(구멍)은 시계 방향이 되도록
+          const correctedData = rewind(data, { reverse: false });
+          countryGeoJSON = correctedData;
+          
+          // 초기 값(예: 한국) 세팅
           document.getElementById('iso-code').value = "south korea";
-          searchCountries(); // 초기 로딩 시 한국 표시
+          searchCountries();
         })
         .catch(err => console.error('GeoJSON 로드 실패:', err));
 
@@ -360,18 +389,23 @@
       renderer.render(scene, camera);
     }
 
-    // --- (6) 국가 검색 및 표시 ---
+    // -------------------------------
+    // (9) 국가 검색 및 표시
+    // -------------------------------
     function searchCountries() {
       const searchTerm = document.getElementById('iso-code').value.trim().toLowerCase();
       const resultsDiv = document.getElementById('results');
       resultsDiv.innerHTML = "";
+
       if (!countryGeoJSON) {
         alert("GeoJSON 데이터가 아직 로드되지 않았습니다.");
         return;
       }
+
       const matches = countryGeoJSON.features.filter(feature =>
         getCountryName(feature).toLowerCase().includes(searchTerm)
       );
+
       if (matches.length === 0) {
         resultsDiv.innerHTML = "<div>검색 결과가 없습니다.</div>";
         return;
@@ -398,18 +432,20 @@
 
     function displayCountry(feature) {
       drawCountryBoundary(feature);
+
       const iso2 = getISO2(feature) || "??";
       createFlagShape(feature, iso2)
         .then(flagMesh => {
           removeOldFlagMesh();
           currentFlagMesh = flagMesh;
           scene.add(currentFlagMesh);
-          // 디버그용 BoxHelper (원하면 주석 처리)
+          // 디버그용 BoxHelper
           const boxHelper = new THREE.BoxHelper(currentFlagMesh, 0xff00ff);
           scene.add(boxHelper);
         })
         .catch(err => console.warn("국기 Shape 생성 실패:", err));
-      // 카메라 이동 (bbox 중심 사용)
+
+      // 카메라 이동
       const { centerPos } = getBoundsCenter(feature);
       new TWEEN.Tween(camera.position)
         .to({ x: centerPos.x * 2.2, y: centerPos.y * 2.2, z: centerPos.z * 2.2 }, 1000)
@@ -421,10 +457,13 @@
         .start();
     }
 
-    // --- (7) 경계선(Line) 표시 (South Korea는 항상 유지) ---
+    // -------------------------------
+    // (10) 경계선(Line) 표시 (South Korea는 항상 유지)
+    // -------------------------------
     function drawCountryBoundary(feature) {
       const isoA3 = feature.properties.ISO_A3;
       const lineColor = (isoA3 === "KOR") ? 0x0000ff : 0xff0000;
+
       if (isoA3 !== "KOR" && currentBoundaryLine) {
         scene.remove(currentBoundaryLine);
         disposeObject(currentBoundaryLine);
@@ -437,6 +476,7 @@
         }
         return;
       }
+
       currentBoundaryLine = createBoundaryLineGroup(feature, lineColor);
       scene.add(currentBoundaryLine);
     }
@@ -445,6 +485,7 @@
       const lineGroup = new THREE.Group();
       const geom = feature.geometry;
       if (!geom) return lineGroup;
+
       if (geom.type === 'Polygon') {
         geom.coordinates.forEach(ring => {
           const lineMesh = createBoundaryLineMesh(ring, color);
@@ -464,6 +505,7 @@
     function createBoundaryLineMesh(ring, color) {
       if (!ring || ring.length < 2) return null;
       const ringCopy = ring.slice();
+      // 첫 점과 마지막 점이 같지 않으면 폐합
       if (!ringCopy[0].every((val, idx) => val === ringCopy[ringCopy.length - 1][idx])) {
         ringCopy.push(ringCopy[0]);
       }
