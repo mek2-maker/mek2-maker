@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>2020년 시도별 인구 상위 10개 지역</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 40px; }
+    .chart-container {
+      width: 1000px;
+      height: 400px;
+    }
+  </style>
+</head>
+<body>
+  <h2>2020년 시도별 인구 상위 10개 지역 (엑셀 데이터 기반)</h2>
+  <div class="chart-container">
+    <canvas id="populationChart"></canvas>
+  </div>
+
+  <script>
+    const labels = [
+      "경기도", "서울특별시", "부산광역시", "경상남도", "인천광역시",
+      "경상북도", "대구광역시", "충청남도", "전라남도", "전북특별자치도"
+    ];
+    const data = [
+      13427014, 9668465, 3391946, 3340216, 2942828,
+      2639422, 2418346, 2121029, 1851549, 1804104
+    ];
+
+    const ctx = document.getElementById('populationChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: '인구 수',
+          data: data,
+          backgroundColor: 'rgba(75, 192, 192, 0.7)'
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            ticks: {
+              callback: function(value) {
+                return value.toLocaleString() + '명';
+              }
+            },
+            title: {
+              display: true,
+              text: '인구 수'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: '지역'
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
