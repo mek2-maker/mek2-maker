@@ -4,11 +4,32 @@
   <meta charset="UTF-8">
   <title>2020년 시도별 인구 상위 10개 지역</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: sans-serif; margin: 40px; }
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      padding: 0;
+      background-color: #f8f8f8;
+    }
+    h2 {
+      font-size: 2vw; /* 뷰포트 크기에 따라 반응형 크기 */
+      text-align: center;
+      background-color: #d3d3d3;
+      padding: 1em;
+      border-radius: 8px;
+      max-width: 90%;
+      margin: 0 auto 30px auto;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
     .chart-container {
-      width: 1000px;
-      height: 400px;
+      width: 95%;
+      height: 60vh; /* 화면 높이 기준으로 비율 지정 */
+      margin: 0 auto;
+    }
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
     }
   </style>
 </head>
@@ -43,6 +64,9 @@
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
         scales: {
           x: {
             ticks: {
