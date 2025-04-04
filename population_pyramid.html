@@ -49,8 +49,11 @@
         name: '남자',
         orientation: 'h',
         type: 'bar',
+        x: maleX,
+        y: ageGroups,
+        text: maleText,
         textposition: 'outside',
-        textangle: 0,        // 여기서 0도로 고정
+        textangle: 0,
         hovertemplate: '남자 인구: %{text:,}<extra></extra>',
         marker: {
           color: 'blue',
@@ -61,8 +64,11 @@
         name: '여자',
         orientation: 'h',
         type: 'bar',
+        x: femaleX,
+        y: ageGroups,
+        text: femaleText,
         textposition: 'outside',
-        textangle: 0,        // 여자도 동일하게 적용 가능
+        textangle: 0,
         hovertemplate: '여자 인구: %{x:,}<extra></extra>',
         marker: {
           color: 'red',
