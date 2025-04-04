@@ -36,6 +36,16 @@
 </div>
 
 <script>
+  // 기본적인 getResponsiveLayout 함수 (예시)
+  function getResponsiveLayout() {
+    return {
+      title: "전국 인구 피라미드 (시계열 애니메이션)",
+      barmode: "relative",
+      xaxis: { title: "인구 수", showgrid: false },
+      yaxis: { title: "연령대", showgrid: false }
+    };
+  }
+
   var maleX = [-1876947.5, -1664268.0, -1988930.0, -2028512.0, -2322519.5, -2319067.0, -2309492.5, -2130754.0, -1521729.5, -1217250.0, -1070289.5, -905945.0, -618156.0, -402920.5, -286155.0, -160008.5, -105226.0, 0, 0, 0, 0];
   var ageGroups = ["0 - 4세", "5 - 9세", "10 - 14세", "15 - 19세", "20 - 24세", "25 - 29세", "30 - 34세", "35 - 39세", "40 - 44세", "45 - 49세", "50 - 54세", "55 - 59세", "60 - 64세", "65 - 69세", "70 - 74세", "75 - 79세", "80 - 84세", "85 - 89세", "90 - 94세", "95 - 99세", "100세 이상"];
   var maleText = maleX.map(function(val){ return Math.abs(val); });
@@ -487,8 +497,8 @@
     "layout": {
       "title": "전국 인구 피라미드 (시계열 애니메이션)",
       "barmode": "relative",
-      "xaxis": {"title": "인구 수", "showgrid": false},
-      "yaxis": {"title": "연령대", "showgrid": false},
+      "xaxis": { "title": "인구 수", "showgrid": false },
+      "yaxis": { "title": "연령대", "showgrid": false },
       "sliders": [{
         "steps": [
           {"label": "1995", "method": "animate", "args": [["1995"], {"frame": {"duration": 50, "redraw": false}, "transition": {"duration": 300, "easing": "cubic-in-out"}, "mode": "immediate"}]},
@@ -527,14 +537,6 @@
         "showactive": true,
         "buttons": [
           {"label": "PLAY", "method": "animate", "args": [null, {"frame": {"duration": 50, "redraw": false}, "transition": {"duration": 300, "easing": "cubic-in-out"}, "mode": "immediate"}]},
-          {"label": "PAUSE", "method": "animate", "args": [[null], {"frame": {"duration": 0, "redraw": false}, "mode": "immediate"}]}
-        ]
-      }]
-      "updatemenus": [{
-        "type": "buttons",
-        "showactive": true,
-        "buttons": [
-          {"label": "PLAY", "method": "animate", "args": [null, {"frame": {"duration": 500, "redraw": true}, "mode": "immediate"}]},
           {"label": "PAUSE", "method": "animate", "args": [[null], {"frame": {"duration": 0, "redraw": false}, "mode": "immediate"}]}
         ]
       }]
