@@ -2,7 +2,6 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>전국 인구 피라미드 (시계열 애니메이션)</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
     body {
@@ -37,22 +36,7 @@
   <div id="pyramid"></div>
 </div>
 
-<script>
-  function getResponsiveLayout() {
-    let width = Math.min(window.innerWidth * 0.9, 900);
-    let height = Math.min(window.innerHeight * 0.7, 600);
-    let fontSize = Math.max(10, Math.min(16, width / 50));
-    return {
-      autosize: true,
-      width: width,
-      height: height,
-      title: { text: "연령별 인구 분포", font: { size: fontSize + 4 } },
-      xaxis: { title: "인구 수", tickfont: { size: fontSize } },
-      yaxis: { title: "연령대", tickfont: { size: fontSize } },
-      barmode: "relative",
-      modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
-    };
-  }
+<script
 
   // 남자와 여자 각각 x, y 배열은 21개 항목(연령대 21개)로 구성
   var fig_pyramid = {
