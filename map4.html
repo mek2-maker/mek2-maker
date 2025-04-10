@@ -2,50 +2,56 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>대한민국 지도 + 오버레이 피라미드</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <title>대한민국 지도 및 인구 피라미드 (오버레이 스타일)</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
+    /* HTML, BODY 전체를 지도에 활용 */
     html, body {
       width: 100%;
       height: 100%;
       margin: 0;
       padding: 0;
     }
+
+    /* 지도는 전체 차지 */
     #map {
       width: 100%;
       height: 100%;
     }
 
-    /* 전국 피라미드 (오른쪽 상단) */
+    /* 전국 피라미드: 오른쪽 상단에 띄우기 */
     #nationalPyramid {
-      position: absolute;
+      position: absolute;  /* 오버레이 배치 */
       top: 10px;
       right: 10px;
-      width: 400px;
-      height: 400px;
+      width: 400px;       /* 크기나 비율은 상황에 따라 조정 */
+      height: 200px;
+      z-index: 1000;      /* 지도보다 위로 */
       border: 1px solid #ccc;
       background: #fff;
-      z-index: 1000;
     }
 
-    /* 지역 피라미드 (오른쪽 상단 아래) */
+    /* 시도(지역) 피라미드: 전국 아래쪽에 오버레이 (처음엔 숨김) */
     #regionalPyramid {
       position: absolute;
-      top: 420px; /* national 바로 아래 */
+      top: 420px;         /* national 아래로 배치 */
       right: 10px;
       width: 400px;
-      height: 400px;
+      height: 200px;
+      z-index: 1000;
       border: 1px solid #ccc;
       background: #fff;
-      z-index: 1000;
-      display: none;
+      display: none;      /* 맨 처음엔 안 보이도록 */
     }
   </style>
 </head>
 <body>
+
+  <!-- 지도 엘리먼트 -->
   <div id="map"></div>
 
-  <!-- 전국 인구 피라미드 -->
+  <!-- 전국 인구 피라미드 (처음엔 보임) -->
   <iframe id="nationalPyramid"
           src="https://mek2-maker.github.io/mek2-maker/korea_population_pyramid.html"
           frameborder="0">
@@ -60,54 +66,89 @@
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // 지도
+    // 1. 지도 초기화
     var map = L.map('map').setView([36.5, 127.5], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
+      attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // 시도이름→파일명
-    function getFileName(name) {
-      const map = {
-        "서울특별시": "seoul",
-        "부산광역시": "busan",
-        // ... 나머지 맵핑 ...
+    // 2. 시도 이름 → 파일명 맵핑
+    function getFileName(provinceName) {
+      const provinceMap = {
+        '서울특별시': 'seoul',
+        '부산광역시': 'busan',
+        '대구광역시': 'daegu',
+        '인천광역시': 'incheon',
+        '광주광역시': 'gwangju',
+        '대전광역시': 'daejeon',
+        '울산광역시': 'ulsan',
+        '세종특별자치시': 'sejong',
+        '경기도': 'gyeonggi',
+        '강원도': 'gangwon',
+        '충청북도': 'chungbuk',
+        '충청남도': 'chungnam',
+        '전라북도': 'jeonbuk',
+        '전라남도': 'jeonnam',
+        '경상북도': 'gyeongbuk',
+        '경상남도': 'gyeongnam',
+        '제주특별자치도': 'jeju'
       };
-      return map[name] || null;
+      return provinceMap[provinceName] || null;
     }
 
-    // GeoJSON
+    // 3. GeoJSON 불러와서 지도에 올리기
     fetch('https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/skorea-provinces-2018-geo.json')
-      .then(res => res.json())
+      .then(response => {
+        if (!response.ok) throw new Error('네트워크 응답 실패');
+        return response.json();
+      })
       .then(geoData => {
         L.geoJSON(geoData, {
           style: { color: '#3388ff', weight: 2, fillOpacity: 0.1 },
-          onEachFeature: function(f, layer) {
+          onEachFeature: function(feature, layer) {
             layer.on('click', function() {
-              const fileKey = getFileName(f.properties.name);
+              const name = feature.properties.name;
+              console.log(name + " 클릭됨");
+              const fileKey = getFileName(name);
+
               if (fileKey) {
-                const iframe = document.getElementById('regionalPyramid');
-                iframe.src = `https://mek2-maker.github.io/mek2-maker/${fileKey}_population_pyramid.html`;
-                iframe.style.display = 'block';
+                // 지역 iframe 준비
+                var regionalIframe = document.getElementById('regionalPyramid');
+                var newSrc = `https://mek2-maker.github.io/mek2-maker/${fileKey}_population_pyramid.html`;
+                console.log("로딩할 지역 피라미드:", newSrc);
+
+                // src 바꾸고 보이게
+                regionalIframe.src = newSrc;
+                regionalIframe.style.display = 'block';
               } else {
-                alert('해당 지역 파일 없음');
+                alert("해당 지역의 피라미드 파일이 없습니다.");
               }
             });
           }
         }).addTo(map);
+      })
+      .catch(err => {
+        console.error("GeoJSON 로드 에러:", err);
       });
 
-    // 메시지 중계 (전국↔지역)
+    // 4. 전국↔시도 슬라이더 동기화용 메시지 중계
     window.addEventListener("message", function(event) {
+      // 메시지 구조 검사
       if (!event.data || event.data.type !== 'frameChange') return;
-      var national = document.getElementById('nationalPyramid');
-      var regional = document.getElementById('regionalPyramid');
-      if (event.source === national.contentWindow) {
-        if (regional.style.display !== 'none') {
-          regional.contentWindow.postMessage(event.data, "*");
+
+      // iframe 참조
+      var nationalIframe = document.getElementById('nationalPyramid');
+      var regionalIframe = document.getElementById('regionalPyramid');
+
+      // 전국 → 지역
+      if (event.source === nationalIframe.contentWindow) {
+        if (regionalIframe.style.display !== 'none') {
+          regionalIframe.contentWindow.postMessage(event.data, "*");
         }
-      } else if (event.source === regional.contentWindow) {
-        national.contentWindow.postMessage(event.data, "*");
+      }
+      // 지역 → 전국
+      else if (event.source === regionalIframe.contentWindow) {
+        nationalIframe.contentWindow.postMessage(event.data, "*");
       }
     });
   </script>
