@@ -44,6 +44,7 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
       controls = new OrbitControls(camera, renderer.domElement);
+      controls.rotateSpeed = 0.3;  // 회전 속도 조절: 값이 작을수록 느리게 회전합니다.
 
       const globe = new THREE.Mesh(
         new THREE.SphereGeometry(R,64,64),
