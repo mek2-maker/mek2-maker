@@ -2,83 +2,77 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>대한민국 지도 및 인구 피라미드 (처음엔 전국만 1/4)</title>
+  <title>대한민국 지도 및 인구 피라미드 (오버레이 스타일)</title>
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    /* flex 레이아웃으로 지도와 패널을 가로로 배치 */
+    /* HTML, BODY 전체를 지도에 활용 */
     html, body {
       width: 100%;
       height: 100%;
       margin: 0;
       padding: 0;
-      display: flex;           /* 가로 배치 */
-      flex-direction: row;
-      flex-wrap: nowrap;       /* 줄바꿈 X */
-      overflow: hidden;        /* 필요 시 스크롤. (auto, hidden 등 상황 맞춰 사용) */
     }
 
-    /* 지도 영역 (왼쪽) */
+    /* 지도는 전체 차지 */
     #map {
-      flex: 1 1 auto;         /* 남은 공간 전부 사용 */
-      min-width: 400px;       /* 지도 최소 너비 */
+      width: 100%;
       height: 100%;
     }
 
-    /* 오른쪽 패널: 전국/시도 피라미드 */
-    #pyramidPanel {
-      flex: 0 0 500px;        /* 고정 폭 500px (조절 가능) */
-      min-width: 350px;       /* 최소 폭 */
-      background: #fff;
-      border-left: 1px solid #ccc;
-      height: 100%;
-      display: flex;
-      flex-direction: column; /* 내부에서도 상하 정렬 */
-    }
-
-    /* (1) 전국 피라미드: 처음에 패널 높이 100% 중 100%가 아니라 25%만 사용 */
+    /* 전국 피라미드: 오른쪽 상단에 띄우기 */
     #nationalPyramid {
-      width: 100%;
-      height: 100%;  /* JS에서 25%로 바꿀 수도 있음 */
-      border: none;
-      transition: height 0.3s ease; /* 부드럽게 변화 (선택사항) */
+      position: absolute;  /* 오버레이 배치 */
+      top: 10px;
+      right: 10px;
+      width: 400px;       /* 크기나 비율은 상황에 따라 조정 */
+      height: 400px;
+      z-index: 1000;      /* 지도보다 위로 */
+      border: 1px solid #ccc;
+      background: #fff;
     }
 
-    /* (2) 시도(지역) 피라미드: 처음엔 완전히 감춤 */
+    /* 시도(지역) 피라미드: 전국 아래쪽에 오버레이 (처음엔 숨김) */
     #regionalPyramid {
-      width: 100%;
-      height: 0;        /* 높이를 0 */
-      border: none;
-      display: none;    /* 화면에서 안보임 */
-      transition: height 0.3s ease; /* 부드럽게 변화 (선택사항) */
+      position: absolute;
+      top: 420px;         /* national 아래로 배치 */
+      right: 10px;
+      width: 400px;
+      height: 400px;
+      z-index: 1000;
+      border: 1px solid #ccc;
+      background: #fff;
+      display: none;      /* 맨 처음엔 안 보이도록 */
     }
   </style>
 </head>
 <body>
-  <!-- 지도 -->
+
+  <!-- 지도 엘리먼트 -->
   <div id="map"></div>
 
-  <!-- 오른쪽: 피라미드 패널 -->
-  <div id="pyramidPanel">
-    <!-- 전국 인구 피라미드 -->
-    <iframe id="nationalPyramid"
-            src="https://mek2-maker.github.io/mek2-maker/korea_population_pyramid.html">
-    </iframe>
-    <!-- 지역 인구 피라미드 (처음엔 감춤) -->
-    <iframe id="regionalPyramid" src=""></iframe>
-  </div>
+  <!-- 전국 인구 피라미드 (처음엔 보임) -->
+  <iframe id="nationalPyramid"
+          src="https://mek2-maker.github.io/mek2-maker/korea_population_pyramid.html"
+          frameborder="0">
+  </iframe>
+
+  <!-- 지역 인구 피라미드 (처음엔 숨김) -->
+  <iframe id="regionalPyramid"
+          src=""
+          frameborder="0">
+  </iframe>
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
   <script>
-    // (A) 지도 초기화
+    // 1. 지도 초기화
     var map = L.map('map').setView([36.5, 127.5], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // (B) 시도이름 → 파일명 매핑
+    // 2. 시도 이름 → 파일명 맵핑
     function getFileName(provinceName) {
       const provinceMap = {
         '서울특별시': 'seoul',
@@ -102,10 +96,10 @@
       return provinceMap[provinceName] || null;
     }
 
-    // (C) 지도에 시도 GeoJSON 표시 후 클릭 이벤트
+    // 3. GeoJSON 불러와서 지도에 올리기
     fetch('https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/skorea-provinces-2018-geo.json')
       .then(response => {
-        if (!response.ok) throw new Error('네트워크 응답 오류');
+        if (!response.ok) throw new Error('네트워크 응답 실패');
         return response.json();
       })
       .then(geoData => {
@@ -118,24 +112,14 @@
               const fileKey = getFileName(name);
 
               if (fileKey) {
-                // 시도 피라미드 iframe 요소
+                // 지역 iframe 준비
                 var regionalIframe = document.getElementById('regionalPyramid');
-                // 전국 피라미드 iframe
-                var nationalIframe = document.getElementById('nationalPyramid');
-
-                // 시도 iframe SRC 세팅
                 var newSrc = `https://mek2-maker.github.io/mek2-maker/${fileKey}_population_pyramid.html`;
-                console.log("로딩할 regional 피라미드:", newSrc);
+                console.log("로딩할 지역 피라미드:", newSrc);
+
+                // src 바꾸고 보이게
                 regionalIframe.src = newSrc;
-
-                // (1) 시도 피라미드 보이기
                 regionalIframe.style.display = 'block';
-                // (2) 각 iframe 높이 조정 → 25% vs 75% (원하시는 비율로)
-                //   - 처음에는 nationwide=100%, region=0%였음
-                //   - 클릭 시 nationwide=25%, region=75%
-                nationalIframe.style.height = '25%';
-                regionalIframe.style.height = '75%';
-
               } else {
                 alert("해당 지역의 피라미드 파일이 없습니다.");
               }
@@ -143,31 +127,28 @@
           }
         }).addTo(map);
       })
-      .catch(error => {
-        console.error('GeoJSON 로드 에러:', error);
+      .catch(err => {
+        console.error("GeoJSON 로드 에러:", err);
       });
 
-    // (D) 메시지 중계 (전국↔시도 간 동기화)
+    // 4. 전국↔시도 슬라이더 동기화용 메시지 중계
     window.addEventListener("message", function(event) {
-      console.log("부모창에서 메시지 수신:", event.data, "출처:", event.source);
-      if (event.data && event.data.type === "frameChange") {
-        var nationalIframe = document.getElementById('nationalPyramid');
-        var regionalIframe = document.getElementById('regionalPyramid');
+      // 메시지 구조 검사
+      if (!event.data || event.data.type !== 'frameChange') return;
 
-        // 전국 피라미드 → 시도 피라미드
-        if (event.source === nationalIframe.contentWindow) {
-          console.log("전국에서 옴:", event.data);
-          if (regionalIframe.style.display !== 'none') {
-            regionalIframe.contentWindow.postMessage(event.data, "*");
-            console.log("시도로 전송:", event.data);
-          }
+      // iframe 참조
+      var nationalIframe = document.getElementById('nationalPyramid');
+      var regionalIframe = document.getElementById('regionalPyramid');
+
+      // 전국 → 지역
+      if (event.source === nationalIframe.contentWindow) {
+        if (regionalIframe.style.display !== 'none') {
+          regionalIframe.contentWindow.postMessage(event.data, "*");
         }
-        // 시도 피라미드 → 전국 피라미드
-        else if (event.source === regionalIframe.contentWindow) {
-          console.log("시도에서 옴:", event.data);
-          nationalIframe.contentWindow.postMessage(event.data, "*");
-          console.log("전국으로 전송:", event.data);
-        }
+      }
+      // 지역 → 전국
+      else if (event.source === regionalIframe.contentWindow) {
+        nationalIframe.contentWindow.postMessage(event.data, "*");
       }
     });
   </script>
