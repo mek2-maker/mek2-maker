@@ -2,59 +2,66 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>대한민국 지도 및 인구 피라미드 (동기화 예시 + 디버그)</title>
-  <!-- Leaflet CSS -->
+  <title>대한민국 지도 및 인구 피라미드 (Flex 예시)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
+    /* 전체 페이지를 Flex로 잡습니다 */
     html, body {
+      width: 100%;
       height: 100%;
       margin: 0;
       padding: 0;
+      display: flex;           /* 수평으로 배열 */
+      flex-direction: row;     /* 가로로 배치 */
     }
+
+    /* 왼쪽: 지도 영역 */
     #map {
-      height: 100%;
+      flex: 1;                /* 남은 공간을 지도에 차지하게 함 */
+      height: 100%;           /* 세로 100% */
     }
+
+    /* 오른쪽: 피라미드 표시하는 영역 */
+    #pyramidPanel {
+      width: 500px;           /* 혹은 40%, px 등 고정값 */
+      min-width: 350px;       /* 최소 너비를 잡아두면 좁아지면서 망가지는 걸 방지 */
+      background: #fff;
+      border-left: 1px solid #ccc;
+      display: flex;          /* 내부에서도 flex로 iframe 나란히 배치 가능 */
+      flex-direction: column; /* 상하 배치 */
+    }
+
+    /* 전국과 시도 iframe들을 위아래로 배치하되, 높이를 고정하거나 조정 가능 */
     #nationalPyramid {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      width: 40%;
-      height: 500px;
-      border: 1px solid #ccc;
-      z-index: 1000;
-      background: white;
+      width: 100%;
+      height: 50%; /* 절반 씩 쓰겠다 (상황에 맞게 조정) */
+      border: none;
     }
     #regionalPyramid {
-      position: absolute;
-      top: 520px;  /* 전국 피라미드 아래 */
-      right: 10px;
-      width: 40%;
-      height: 500px;
-      border: 1px solid #ccc;
-      z-index: 1000;
-      background: white;
-      display: none;  /* 초기엔 숨김 */
+      width: 100%;
+      height: 50%; /* 절반 씩 */
+      border: none;
+      display: none; /* 초기엔 숨김 */
     }
   </style>
 </head>
 <body>
+
+  <!-- 지도 -->
   <div id="map"></div>
 
-  <!-- 전국 인구 피라미드 (iframe) -->
-  <iframe id="nationalPyramid" 
-          src="https://mek2-maker.github.io/mek2-maker/korea_population_pyramid.html" 
-          frameborder="0">
-  </iframe>
+  <!-- 피라미드 패널 -->
+  <div id="pyramidPanel">
+    <iframe id="nationalPyramid"
+            src="https://mek2-maker.github.io/mek2-maker/korea_population_pyramid.html">
+    </iframe>
 
-  <!-- 시도 인구 피라미드 (iframe, 처음엔 비활성) -->
-  <iframe id="regionalPyramid"
-          src=""
-          frameborder="0">
-  </iframe>
+    <iframe id="regionalPyramid"
+            src="">
+    </iframe>
+  </div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
   <script>
     // 지도 초기화
     var map = L.map('map').setView([36.5, 127.5], 7);
