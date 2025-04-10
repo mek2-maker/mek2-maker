@@ -2,74 +2,77 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>대한민국 지도 및 인구 피라미드 (Flex 예시)</title>
+  <title>대한민국 지도 및 인구 피라미드 (절대 가로 2단)</title>
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    /* 전체 페이지를 Flex로 잡습니다 */
+    /* 전체 페이지를 Flex 컨테이너로 설정 (wrap 방지) */
     html, body {
       width: 100%;
       height: 100%;
       margin: 0;
       padding: 0;
-      display: flex;           /* 수평으로 배열 */
-      flex-direction: row;     /* 가로로 배치 */
+      display: flex;
+      flex-direction: row;  /* 자식들을 가로로 배치 */
+      flex-wrap: nowrap;    /* 랩핑되지 않도록 */
+      overflow: auto;       /* 공간이 부족할 경우 가로 스크롤 발생 */
     }
 
     /* 왼쪽: 지도 영역 */
     #map {
-      flex: 1;                /* 남은 공간을 지도에 차지하게 함 */
-      height: 100%;           /* 세로 100% */
+      flex: 1 1 auto;      /* 남은 공간 모두 채움 */
+      min-width: 400px;    /* 최소 너비 지정 */
+      height: 100%;
     }
 
-    /* 오른쪽: 피라미드 표시하는 영역 */
+    /* 오른쪽: 피라미드 패널 (고정 폭) */
     #pyramidPanel {
-      width: 500px;           /* 혹은 40%, px 등 고정값 */
-      min-width: 350px;       /* 최소 너비를 잡아두면 좁아지면서 망가지는 걸 방지 */
+      flex: 0 0 500px;     /* 너비 500px 고정 (원하는 값으로 수정 가능) */
+      min-width: 350px;
       background: #fff;
       border-left: 1px solid #ccc;
-      display: flex;          /* 내부에서도 flex로 iframe 나란히 배치 가능 */
-      flex-direction: column; /* 상하 배치 */
+      height: 100%;
+      display: flex;
+      flex-direction: column;  /* 내부 요소(iframe) 상하 배치 */
     }
 
-    /* 전국과 시도 iframe들을 위아래로 배치하되, 높이를 고정하거나 조정 가능 */
-    #nationalPyramid {
+    /* 각 iframe (전국, 시도 피라미드) */
+    #nationalPyramid, #regionalPyramid {
       width: 100%;
-      height: 50%; /* 절반 씩 쓰겠다 (상황에 맞게 조정) */
       border: none;
     }
+    #nationalPyramid {
+      height: 50%;  /* 패널 높이의 절반 */
+    }
     #regionalPyramid {
-      width: 100%;
-      height: 50%; /* 절반 씩 */
-      border: none;
-      display: none; /* 초기엔 숨김 */
+      height: 50%;  /* 패널 높이의 절반 */
+      display: none;  /* 기본적으로 숨김 */
     }
   </style>
 </head>
 <body>
-
-  <!-- 지도 -->
+  <!-- 지도 영역 -->
   <div id="map"></div>
 
-  <!-- 피라미드 패널 -->
+  <!-- 오른쪽 피라미드 패널 -->
   <div id="pyramidPanel">
-    <iframe id="nationalPyramid"
+    <iframe id="nationalPyramid" 
             src="https://mek2-maker.github.io/mek2-maker/korea_population_pyramid.html">
     </iframe>
-
-    <iframe id="regionalPyramid"
-            src="">
+    <iframe id="regionalPyramid" src="">
     </iframe>
   </div>
 
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // 지도 초기화
+    // 지도 초기화: 중심좌표(대한민국 중앙)와 줌 레벨 지정
     var map = L.map('map').setView([36.5, 127.5], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // 시도 이름을 파일명으로 변환하는 함수
+    // 시도 이름과 해당 파일명을 매핑하는 함수
     function getFileName(provinceName) {
       const provinceMap = {
         '서울특별시': 'seoul',
@@ -93,7 +96,7 @@
       return provinceMap[provinceName] || null;
     }
 
-    // GeoJSON 데이터 로드 및 시도 클릭 이벤트 설정
+    // GeoJSON 데이터 로드 및 지도에 시도 경계를 추가하고 클릭 이벤트 등록
     fetch('https://raw.githubusercontent.com/mek2-maker/mek2-maker/main/skorea-provinces-2018-geo.json')
       .then(response => {
         if (!response.ok) throw new Error('네트워크 응답 오류');
@@ -124,32 +127,31 @@
         console.error('GeoJSON 로드 에러:', error);
       });
 
-    // 부모 창에서 두 피라미드 간 동기화 메시지 중계 및 디버그 로그
+    // 부모 창 및 iframe 간 동기화를 위한 메시지 이벤트 리스너 (디버그 로그 포함)
     window.addEventListener("message", function(event) {
-    console.log("부모 창에서 메시지 수신:", event.data, "출처:", event.source);
+      console.log("부모 창에서 메시지 수신:", event.data, "출처:", event.source);
+      if (event.data && event.data.type === "frameChange") {
+        var nationalIframe = document.getElementById('nationalPyramid');
+        var regionalIframe = document.getElementById('regionalPyramid');
 
-    if (event.data && event.data.type === "frameChange") {
-      var nationalIframe = document.getElementById('nationalPyramid');
-      var regionalIframe = document.getElementById('regionalPyramid');
-
-      // 전국 피라미드에서 온 메시지일 경우 (그리고 regional iframe이 보이는 경우)
-      if (event.source === nationalIframe.contentWindow) {
-        console.log("메시지가 전국 피라미드에서 왔습니다. regional 피라미드로 전송 (regional iframe display:", regionalIframe.style.display, ")");
-        if (regionalIframe.style.display !== 'none') {
-          regionalIframe.contentWindow.postMessage(event.data, "*");
-          console.log("regional 피라미드로 메시지 전송:", event.data);
+        // 전국 피라미드에서 보낸 메시지인 경우 (regional이 보이는 경우)
+        if (event.source === nationalIframe.contentWindow) {
+          console.log("전국 피라미드에서 온 메시지:", event.data);
+          if (regionalIframe.style.display !== 'none') {
+            regionalIframe.contentWindow.postMessage(event.data, "*");
+            console.log("regional 피라미드로 메시지 전송:", event.data);
+          }
+        }
+        // 시도 피라미드에서 보낸 메시지인 경우
+        else if (event.source === regionalIframe.contentWindow) {
+          console.log("시도 피라미드에서 온 메시지:", event.data);
+          nationalIframe.contentWindow.postMessage(event.data, "*");
+          console.log("national 피라미드로 메시지 전송:", event.data);
+        } else {
+          console.log("알 수 없는 출처의 메시지:", event.data);
         }
       }
-      // 시도(지역) 피라미드에서 온 메시지일 경우
-      else if (event.source === regionalIframe.contentWindow) {
-        console.log("메시지가 시도 피라미드에서 왔습니다. national 피라미드로 전송");
-        nationalIframe.contentWindow.postMessage(event.data, "*");
-        console.log("national 피라미드로 메시지 전송:", event.data);
-      } else {
-        console.log("알 수 없는 출처에서 온 메시지:", event.data);
-      }
-    }
-  });
+    });
   </script>
 </body>
 </html>
