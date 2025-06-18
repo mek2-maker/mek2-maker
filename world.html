@@ -133,7 +133,7 @@
     // ----------------------------------------------------------------
     // (1) polygonToSphereMesh: earcut를 이용해 "구 표면"에 맞춘 3D 폴리곤 생성
     // ----------------------------------------------------------------
-    function polygonToSphereMesh(coordsArray, { minLon, maxLon, minLat, maxLat, centerLon, centerLat }, radius = globeRadius + 0.02) {
+    function polygonToSphereMesh(coordsArray, { minLon, maxLon, minLat, maxLat, centerLon, centerLat }, radius = globeRadius) {
       const outerRing = coordsArray[0];
       if (!outerRing || outerRing.length < 3) return null;
       const outer2D = toLocal2D(outerRing, centerLon, centerLat);
