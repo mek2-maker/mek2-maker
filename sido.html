@@ -14,7 +14,7 @@
       position: absolute;
       top: 30px;
       right: 30px;
-      width: 280px;
+      width: 200px;
       background: white;
       border: 2px solid #444;
       padding: 10px;
@@ -38,7 +38,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  const map = L.map('map', { boxZoom: false }).setView([36.5, 127.8], 7);
+  const map = L.map('map', { boxZoom: false }).setView([36.5, 127.8], 5);
   map.boxZoom.disable();
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
