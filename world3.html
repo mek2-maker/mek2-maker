@@ -27,13 +27,12 @@
       background:rgba(255,255,255,0.95); font-family:sans-serif;
     }
     .info { flex:1; padding:10px; text-align:center; }
-    .info img {
-      max-height:120px; max-width:100%; object-fit:contain; margin-bottom:6px;
-    }
+    .info img { max-height:60px; margin-bottom:6px; }
   </style>
 </head>
 <body>
   <div id="overlay">
+    <label for="iso-code" style="display:none;">Country</label>
     <input id="iso-code" placeholder="Enter country name" list="country-names">
     <button id="searchBtn">Search</button>
     <div id="message"></div>
@@ -51,7 +50,7 @@
     import TWEEN             from './libs/tween.esm.js';
     import Papa              from 'https://cdn.jsdelivr.net/npm/papaparse@5.3.2/+esm';
 
-    // 한 번만 PNG→JPG fallback, 무한 재시도 방지
+    // === 플래그 이미지 무한 반복 방지 ===
     function makeFlagImg(code, alt) {
       const img = document.createElement('img');
       img.alt = alt;
@@ -65,83 +64,96 @@
 
     let scene, camera, renderer, controls;
     let geoJSON, infoData, curLine, curFill;
-    const R = 1, FILL_R = R+0.0001, LINE_R = R+0.0002;
+    let koreaLine, koreaFill;
+    let countryNames = [];
+    const R      = 1;
+    const FILL_R = R + 0.0001;
+    const LINE_R = R + 0.0002;
     const msgDiv = document.getElementById('message');
 
-    function showMessage(msg, type='error') {
+    function showMessage(msg, type='error'){
       msgDiv.textContent = msg;
-      msgDiv.style.color = type==='error' ? 'red' : 'green';
-      setTimeout(()=> msgDiv.textContent = '', 3000);
+      msgDiv.style.color = (type==='error' ? 'red' : 'green');
+      setTimeout(()=>msgDiv.textContent='', 3000);
     }
 
-    function animate(time) {
+    function animate(time){
       requestAnimationFrame(animate);
       TWEEN.update(time);
       controls.update();
       renderer.render(scene, camera);
     }
 
-    function lonLatToXYZ(lon, lat, r=R) {
-      const phi   = (90 - lat) * Math.PI/180;
-      const theta = (lon + 180) * Math.PI/180;
+    function lonLatToXYZ(lon, lat, r=R){
+      const φ = (90 - lat)*Math.PI/180;
+      const θ = (lon + 180)*Math.PI/180;
       return new THREE.Vector3(
-        -r * Math.sin(phi)*Math.cos(theta),
-         r * Math.cos(phi),
-         r * Math.sin(phi)*Math.sin(theta)
+        -r * Math.sin(φ)*Math.cos(θ),
+         r * Math.cos(φ),
+         r * Math.sin(φ)*Math.sin(θ)
       );
     }
 
-    function getCenterOfFeature(f) {
+    function getCenterOfFeature(f){
       const coords = f.geometry.type==='Polygon'
         ? f.geometry.coordinates.flat()
         : f.geometry.coordinates.flat(2);
       let [minLon,maxLon,minLat,maxLat] = [180,-180,90,-90];
-      coords.forEach(([lon,lat]) => {
+      coords.forEach(([lon,lat])=>{
         minLon = Math.min(minLon, lon);
         maxLon = Math.max(maxLon, lon);
         minLat = Math.min(minLat, lat);
         maxLat = Math.max(maxLat, lat);
       });
-      return { centerLon:(minLon+maxLon)/2, centerLat:(minLat+maxLat)/2 };
+      return {
+        centerLon:(minLon+maxLon)/2,
+        centerLat:(minLat+maxLat)/2
+      };
     }
 
-    function drawBoundary(feature, color) {
+    function drawBoundary(feature, color){
       const grp = new THREE.Group();
       const polys = feature.geometry.type==='Polygon'
         ? [feature.geometry.coordinates]
         : feature.geometry.coordinates;
-      polys.forEach(poly => poly.forEach(ring => {
-        const pts = ring.map(([lon,lat]) => lonLatToXYZ(lon,lat,LINE_R));
-        if(pts.length && !pts[0].equals(pts[pts.length-1])) pts.push(pts[0].clone());
-        const geom = new THREE.BufferGeometry().setFromPoints(pts);
-        grp.add(new THREE.Line(geom, new THREE.LineBasicMaterial({color})));
-      }));
+      polys.forEach(poly=>{
+        poly.forEach(ring=>{
+          const pts = ring.map(([lon,lat])=> lonLatToXYZ(lon,lat,LINE_R) );
+          if(pts.length && !pts[0].equals(pts[pts.length-1])){
+            pts.push(pts[0].clone());
+          }
+          const geom = new THREE.BufferGeometry().setFromPoints(pts);
+          grp.add(new THREE.Line(geom, new THREE.LineBasicMaterial({color})));
+        });
+      });
       return grp;
     }
 
-    function drawFill(feature, color) {
+    function drawFill(feature, color){
       const grp = new THREE.Group();
       const {centerLon,centerLat} = getCenterOfFeature(feature);
       const polys = feature.geometry.type==='Polygon'
         ? [feature.geometry.coordinates]
         : feature.geometry.coordinates;
-      polys.forEach(poly => {
-        const rings2D = poly.map(ring => ring.map(([lon,lat]) => [
-          (lon-centerLon)*Math.PI/180,
-          (lat-centerLat)*Math.PI/180
-        ]));
-        const verts=[], holes=[]; let off=0;
+      polys.forEach(poly=>{
+        const rings2D = poly.map(ring=>
+          ring.map(([lon,lat])=>[
+            (lon-centerLon)*Math.PI/180,
+            (lat-centerLat)*Math.PI/180
+          ])
+        );
+        const verts2D = [], holes=[]; let off=0;
         rings2D.forEach((r,i)=>{
           if(i>0) holes.push(off);
-          r.forEach(([x,y])=>{ verts.push(x,y); off++; });
+          r.forEach(([x,y])=>{ verts2D.push(x,y); off++; });
         });
-        if(verts.length < 6) return;
-        const idxs = earcut(verts, holes, 2), pos=[];
-        idxs.forEach(i => {
-          const x = verts[2*i], y = verts[2*i+1];
-          const lon = centerLon + x*180/Math.PI;
-          const lat = centerLat + y*180/Math.PI;
-          const v = lonLatToXYZ(lon,lat,FILL_R);
+        if(verts2D.length<6) return;
+        const idxs = earcut(verts2D, holes, 2), pos=[];
+        idxs.forEach(i=>{
+          const x=verts2D[2*i], y=verts2D[2*i+1];
+          const lon=centerLon + x*180/Math.PI;
+          const lat=centerLat + y*180/Math.PI;
+          const v=lonLatToXYZ(lon,lat,FILL_R);
           pos.push(v.x,v.y,v.z);
         });
         const geom = new THREE.BufferGeometry();
@@ -154,12 +166,12 @@
       return grp;
     }
 
-    function updateLeftPanel() {
+    function updateLeftPanel(){
       const left = document.getElementById('left-info');
-      const kor = infoData.find(i=>i.iso2==='kr');
+      const kor  = infoData.find(i=>i.iso2==='kr');
       left.innerHTML = kor ? '' : 'No data';
       if(!kor) return;
-      left.appendChild(makeFlagImg('kr','Republic of Korea'));
+      left.appendChild( makeFlagImg('kr','Republic of Korea') );
       left.insertAdjacentHTML('beforeend', `
         <strong>Republic of Korea</strong><br>
         Capital: ${kor.capital}<br>
@@ -169,14 +181,14 @@
       `);
     }
 
-    function updateRightPanel(f) {
-      const code = f.properties.ISO_A2.toLowerCase();
+    function updateRightPanel(feature){
+      const code = feature.properties.ISO_A2.toLowerCase();
       const info = infoData.find(i=>i.iso2===code);
       const right = document.getElementById('right-info');
       right.innerHTML = info ? '' : 'No data';
       if(!info) return;
       const name = code==='kr' ? 'Republic of Korea' : info.eng_name;
-      right.appendChild(makeFlagImg(code, name+' Flag'));
+      right.appendChild( makeFlagImg(code, name+' Flag') );
       right.insertAdjacentHTML('beforeend', `
         <strong>${name}</strong><br>
         Capital: ${info.capital}<br>
@@ -186,61 +198,68 @@
       `);
     }
 
-    function displayCountry(f) {
-      if(!f){ showMessage('Country not found','error'); return; }
-      showMessage(`${f.properties.ADMIN} selected`,'success');
+    function displayCountry(feature){
+      if(!feature){ showMessage('Country not found','error'); return; }
+      showMessage(`${feature.properties.ADMIN} selected`,'success');
       if(curLine) scene.remove(curLine);
       if(curFill) scene.remove(curFill);
-      const isKR = f.properties.ISO_A2.toLowerCase()==='kr';
-      curLine = drawBoundary(f, isKR?0x0000ff:0xff0000);
-      curFill = drawFill(f, isKR?0x0000ff:0xff0000);
+      const isKR = feature.properties.ISO_A2.toLowerCase()==='kr';
+      curLine = drawBoundary(feature, isKR?0x0000ff:0xff0000);
+      curFill = drawFill(feature, isKR?0x0000ff:0xff0000);
       scene.add(curLine,curFill);
-      updateLeftPanel(); updateRightPanel(f);
-      const {centerLon,centerLat} = getCenterOfFeature(f);
+      updateLeftPanel(); updateRightPanel(feature);
+      const {centerLon,centerLat} = getCenterOfFeature(feature);
       new TWEEN.Tween(camera.position)
-        .to({...lonLatToXYZ(centerLon,centerLat,R+1.5)},800)
-        .easing(TWEEN.Easing.Quadratic.Out).start();
+        .to({x:centerLon, y:centerLat, z:R+1.5}, 800)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .start();
     }
 
-    async function init() {
+    async function init(){
       scene    = new THREE.Scene();
-      camera   = new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,100);
+      camera   = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.1,100);
       renderer = new THREE.WebGLRenderer({antialias:true});
-      renderer.setSize(innerWidth,innerHeight);
+      renderer.setSize(window.innerWidth,window.innerHeight);
       document.body.appendChild(renderer.domElement);
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true; controls.dampingFactor = 0.05;
       controls.rotateSpeed = 0.3;
 
-      // Globe
+      // globe
+      const tex = new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg');
       scene.add(new THREE.Mesh(
         new THREE.SphereGeometry(R,64,64),
-        new THREE.MeshBasicMaterial({map:new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg')})
+        new THREE.MeshBasicMaterial({map:tex})
       ));
 
-      // load data
-      const txt = await fetch('country_info_198.csv').then(r=>r.text());
-      infoData = Papa.parse(txt,{header:true,skipEmptyLines:true,
-        transformHeader:h=>h.replace(/^\uFEFF/,'').trim().toLowerCase()})
-        .data.map(r=>({
-          iso2:r.iso2.toLowerCase(),
-          eng_name:r.eng_name,
-          area_km2:+r.area_km2,
-          pop_jul_total:+r.pop_jul_total,
-          gdp:+r.gdp,
-          capital:r.capital
-        }));
+      // data load
+      const csvText = await fetch('country_info_198.csv').then(r=>r.text());
+      infoData = Papa.parse(csvText, {
+        header:true, skipEmptyLines:true,
+        transformHeader:h=>h.replace(/^\uFEFF/,'').trim().toLowerCase()
+      }).data.map(r=>({
+        iso2:           r.iso2.toLowerCase(),
+        eng_name:       r.eng_name,
+        area_km2:       +r.area_km2 || 0,
+        pop_jul_total:  +r.pop_jul_total || 0,
+        gdp:            +r.gdp || 0,
+        capital:        r.capital
+      }));
+
       geoJSON = await fetch('countries.geojson').then(r=>r.json());
-      const korF = geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase().includes('korea'));
+      const korF = geoJSON.features.find(f=>
+        f.properties.ADMIN.toLowerCase().includes('korea')
+      );
       koreaLine = drawBoundary(korF,0x0000ff);
       koreaFill = drawFill(korF,0x0000ff);
       scene.add(koreaLine,koreaFill);
 
-      // populate datalist
-      geoJSON.features.forEach(ff=>{
+      // datalist
+      const dl = document.getElementById('country-names');
+      geoJSON.features.forEach(f=>{
         const opt=document.createElement('option');
-        opt.value=ff.properties.ADMIN;
-        document.getElementById('country-names').appendChild(opt);
+        opt.value=f.properties.ADMIN;
+        dl.appendChild(opt);
       });
 
       // initial
@@ -251,16 +270,16 @@
 
       document.getElementById('searchBtn').onclick = ()=>{
         const q=document.getElementById('iso-code').value.trim().toLowerCase();
-        let f=geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase()===q);
+        let f = geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase()===q);
         if(!f) f=geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase().includes(q));
         displayCountry(f);
       };
 
       animate();
       window.addEventListener('resize',()=>{
-        camera.aspect=innerWidth/innerHeight;
+        camera.aspect=window.innerWidth/window.innerHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize(innerWidth,innerHeight);
+        renderer.setSize(window.innerWidth,window.innerHeight);
       });
     }
 
