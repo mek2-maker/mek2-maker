@@ -438,6 +438,20 @@
       return new THREE.Line(geometry, material);
     }
 
+    function addDebugPoint(lon, lat, color = 0xff0000) {
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(0.005, 8, 8),
+        new THREE.MeshBasicMaterial({ color })
+      );
+      const pos = lonLatToXYZ(lon, lat, R + 0.02);
+      sphere.position.copy(pos);
+      scene.add(sphere);
+    }
+    
+    // 예: 대한민국 동해안 위도/경도 좌표
+    addDebugPoint(128.3649, 38.6243);
+
+
     // 이벤트 설정
     window.onload = init;
     document.getElementById('searchBtn').addEventListener('click', searchCountries);
@@ -449,3 +463,5 @@
   </script>
 </body>
 </html>
+
+      
