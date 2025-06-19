@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Globe – Country Fill Snug</title>
+  <style>
+    body { margin:0; overflow:hidden; }
+    #overlay {
+      position:absolute; top:10px; left:10px;
+      background:rgba(255,255,255,0.9);
+      padding:8px; border-radius:4px;
+      font-family:sans-serif; z-index:10;
+      display:flex; gap:5px; align-items:center;
+    }
+    #overlay input {
+      width:140px; padding:4px; border:1px solid #ccc; border-radius:3px;
+    }
+    #overlay button {
+      padding:4px 8px; border:1px solid #007bff;
+      background-color:#007bff; color:#fff; border-radius:3px;
+      cursor:pointer;
+    }
+    #overlay button:hover { background-color:#0056b3; }
+    #message { margin-left:10px; color:red; font-size:0.9em; }
+    #info-panel {
+      position:absolute; bottom:0; left:0; width:100%; height:200px; display:flex;
+      background:rgba(255,255,255,0.95); font-family:sans-serif;
+    }
+    .info { flex:1; padding:10px; text-align:center; }
+    .info img { max-height:60px; margin-bottom:6px; }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <label for="iso-code" style="display:none;">Country</label>
+    <input id="iso-code" placeholder="Enter country name" list="country-names">
+    <button id="searchBtn">Search</button>
+    <div id="message"></div>
+    <datalist id="country-names"></datalist>
+  </div>
+  <div id="info-panel">
+    <div id="left-info" class="info"></div>
+    <div id="right-info" class="info"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE        from './libs/three.module.js';
+    import { OrbitControls } from './libs/OrbitControls.js';
+    import earcut            from './libs/earcut.js';
+    import TWEEN             from './libs/tween.esm.js';
+    import Papa              from 'https://cdn.jsdelivr.net/npm/papaparse@5.3.2/+esm';
+
+    // ────── 플래그 이미지 1회 fallback 함수 ──────
+    function makeFlagImg(code, alt) {
+      const img = document.createElement('img');
+      img.alt = alt;
+      img.src = `./flag/${code}.png`;           // 먼저 PNG 시도
+      img.onerror = () => {
+        img.onerror = null;                      // 두 번째 실패 방지
+        img.src     = `./flag/${code}.jpg`;      // JPG로 한 번만 fallback
+      };
+      return img;
+    }
+
+    let scene, camera, renderer, controls;
+    let geoJSON, infoData, curLine, curFill;
+    let koreaLine, koreaFill;
+    let countryNames = [];
+    const R      = 1;
+    const FILL_R = R + 0.0001;
+    const LINE_R = R + 0.0002;
+    const msgDiv = document.getElementById('message');
+
+    function showMessage(msg, type='error') {
+      msgDiv.textContent = msg;
+      msgDiv.style.color = (type==='error' ? 'red' : 'green');
+      setTimeout(() => msgDiv.textContent = '', 3000);
+    }
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+      TWEEN.update(time);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function lonLatToXYZ(lon, lat, r=R) {
+      const φ = (90 - lat)*Math.PI/180;
+      const θ = (lon + 180)*Math.PI/180;
+      return new THREE.Vector3(
+        -r * Math.sin(φ)*Math.cos(θ),
+         r * Math.cos(φ),
+         r * Math.sin(φ)*Math.sin(θ)
+      );
+    }
+
+    function getCenterOfFeature(f) {
+      const coords = f.geometry.type==='Polygon'
+        ? f.geometry.coordinates.flat()
+        : f.geometry.coordinates.flat(2);
+      let [minLon, maxLon, minLat, maxLat] = [180, -180, 90, -90];
+      coords.forEach(([lon, lat]) => {
+        minLon = Math.min(minLon, lon);
+        maxLon = Math.max(maxLon, lon);
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+      });
+      return { centerLon:(minLon+maxLon)/2, centerLat:(minLat+maxLat)/2 };
+    }
+
+    function drawBoundary(feature, color) {
+      const grp = new THREE.Group();
+      const { centerLon, centerLat } = getCenterOfFeature(feature);
+      const polys = feature.geometry.type==='Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+      polys.forEach(poly => {
+        poly.forEach(ring => {
+          const pts = ring.map(([lon,lat]) => lonLatToXYZ(lon,lat,LINE_R));
+          if (pts.length && !pts[0].equals(pts[pts.length-1])) {
+            pts.push(pts[0].clone());
+          }
+          const geom = new THREE.BufferGeometry().setFromPoints(pts);
+          grp.add(new THREE.Line(geom, new THREE.LineBasicMaterial({color})));
+        });
+      });
+      return grp;
+    }
+
+    function drawFill(feature, color) {
+      const grp = new THREE.Group();
+      const { centerLon, centerLat } = getCenterOfFeature(feature);
+      const polys = feature.geometry.type==='Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+      polys.forEach(poly => {
+        const rings2D = poly.map(ring => ring.map(([lon,lat]) => [
+          (lon-centerLon)*Math.PI/180,
+          (lat-centerLat)*Math.PI/180
+        ]));
+        const verts = [], holes = [];
+        let offset = 0;
+        rings2D.forEach((r,i) => {
+          if (i>0) holes.push(offset);
+          r.forEach(([x,y]) => { verts.push(x,y); offset++; });
+        });
+        if (verts.length < 6) return;
+        const indices = earcut(verts, holes, 2), pos = [];
+        indices.forEach(i => {
+          const x = verts[2*i], y = verts[2*i+1];
+          const lon = centerLon + x*180/Math.PI;
+          const lat = centerLat + y*180/Math.PI;
+          const v = lonLatToXYZ(lon,lat,FILL_R);
+          pos.push(v.x,v.y,v.z);
+        });
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+        grp.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+          color, transparent:true, opacity:0.5,
+          side:THREE.FrontSide, depthTest:false, depthWrite:false
+        })));
+      });
+      return grp;
+    }
+
+    function updateLeftPanel() {
+      const left = document.getElementById('left-info');
+      const kor  = infoData.find(i => i.iso2==='kr');
+      left.innerHTML = kor ? '' : 'No data';
+      if (!kor) return;
+      left.appendChild(makeFlagImg('kr','Republic of Korea'));
+      left.insertAdjacentHTML('beforeend', `
+        <strong>Republic of Korea</strong><br>
+        Capital: ${kor.capital}<br>
+        Area: ${kor.area_km2.toLocaleString()} km²<br>
+        Pop: ${kor.pop_jul_total.toLocaleString()}<br>
+        GDP: ${kor.gdp.toLocaleString()} $
+      `);
+    }
+
+    function updateRightPanel(feature) {
+      const code  = feature.properties.ISO_A2.toLowerCase();
+      const info  = infoData.find(i => i.iso2===code);
+      const right = document.getElementById('right-info');
+      right.innerHTML = info ? '' : 'No data';
+      if (!info) return;
+      const name = code==='kr' ? 'Republic of Korea' : info.eng_name;
+      right.appendChild(makeFlagImg(code, name+' Flag'));
+      right.insertAdjacentHTML('beforeend', `
+        <strong>${name}</strong><br>
+        Capital: ${info.capital}<br>
+        Area: ${info.area_km2.toLocaleString()} km²<br>
+        Pop: ${info.pop_jul_total.toLocaleString()}<br>
+        GDP: ${info.gdp.toLocaleString()} $
+      `);
+    }
+
+    function displayCountry(feature) {
+      if (!feature) { showMessage('Country not found','error'); return; }
+      showMessage(`${feature.properties.ADMIN} selected`,'success');
+      if (curLine) scene.remove(curLine);
+      if (curFill) scene.remove(curFill);
+      const isKR = feature.properties.ISO_A2.toLowerCase()==='kr';
+      curLine = drawBoundary(feature, isKR?0x0000ff:0xff0000);
+      curFill = drawFill(feature, isKR?0x0000ff:0xff0000);
+      scene.add(curLine,curFill);
+      updateLeftPanel();
+      updateRightPanel(feature);
+      const { centerLon, centerLat } = getCenterOfFeature(feature);
+      const tgt = lonLatToXYZ(centerLon,centerLat,R+1.5);
+      new TWEEN.Tween(camera.position)
+        .to({ x:tgt.x, y:tgt.y, z:tgt.z }, 800)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .start();
+    }
+
+    async function init() {
+      scene    = new THREE.Scene();
+      camera   = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight,0.1,100);
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true; controls.dampingFactor = 0.05;
+      controls.rotateSpeed = 0.3;
+
+      // add globe
+      const tex = new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg');
+      scene.add(new THREE.Mesh(
+        new THREE.SphereGeometry(R,64,64),
+        new THREE.MeshBasicMaterial({map:tex})
+      ));
+
+      // load CSV
+      const csvText = await fetch('country_info_198.csv').then(r=>r.text());
+      infoData = Papa.parse(csvText, {
+        header: true, skipEmptyLines: true,
+        transformHeader: h => h.replace(/^\uFEFF/,'').trim().toLowerCase()
+      }).data.map(r => ({
+        iso2:           r.iso2.toLowerCase(),
+        eng_name:       r.eng_name,
+        area_km2:       parseFloat(r.area_km2)||0,
+        pop_jul_total:  parseFloat(r.pop_jul_total)||0,
+        gdp:            parseFloat(r.gdp)||0,
+        capital:        r.capital
+      }));
+
+      // load geojson
+      geoJSON = await fetch('countries.geojson').then(r=>r.json());
+      const korF = geoJSON.features.find(f => f.properties.ADMIN.toLowerCase().includes('korea'));
+      koreaLine = drawBoundary(korF, 0x0000ff);
+      koreaFill = drawFill(korF, 0x0000ff);
+      scene.add(koreaLine,koreaFill);
+
+      // build datalist
+      const dl = document.getElementById('country-names');
+      geoJSON.features.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.properties.ADMIN;
+        dl.appendChild(opt);
+      });
+
+      // initial: South Korea
+      displayCountry(korF);
+      const { centerLon, centerLat } = getCenterOfFeature(korF);
+      camera.position.copy(lonLatToXYZ(centerLon,centerLat,R+1.5));
+      controls.target.set(0,0,0);
+
+      // search button
+      document.getElementById('searchBtn').onclick = () => {
+        const q = document.getElementById('iso-code').value.trim().toLowerCase();
+        let f = geoJSON.features.find(ff => ff.properties.ADMIN.toLowerCase()===q);
+        if (!f) f = geoJSON.features.find(ff => ff.properties.ADMIN.toLowerCase().includes(q));
+        displayCountry(f);
+      };
+
+      animate();
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
