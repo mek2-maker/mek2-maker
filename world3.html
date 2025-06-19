@@ -208,9 +208,10 @@
       curFill = drawFill(feature, isKR?0x0000ff:0xff0000);
       scene.add(curLine,curFill);
       updateLeftPanel(); updateRightPanel(feature);
-      const {centerLon,centerLat} = getCenterOfFeature(feature);
+      const { centerLon, centerLat } = getCenterOfFeature(feature);
+      const tgt = lonLatToXYZ(centerLon, centerLat, R + 1.5);
       new TWEEN.Tween(camera.position)
-        .to({x:centerLon, y:centerLat, z:R+1.5}, 800)
+        .to({ x: tgt.x, y: tgt.y, z: tgt.z }, 800)
         .easing(TWEEN.Easing.Quadratic.Out)
         .start();
     }
