@@ -81,10 +81,11 @@
 
     function addDebugPoint(lon, lat, color = 0xff0000) {
       const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(0.005, 8, 8),
+        new THREE.SphereGeometry(0.002, 8, 8),  // 크기 작게
         new THREE.MeshBasicMaterial({ color })
       );
-      const pos = lonLatToXYZ(lon, lat, globeRadius + 0.02);
+      // 📌 위치는 지구 표면과 거의 동일하게
+      const pos = lonLatToXYZ(lon, lat, globeRadius + 0.001);
       sphere.position.copy(pos);
       scene.add(sphere);
     }
@@ -322,7 +323,7 @@
       scene.add(globeMesh);
 
       // ✅ 디버그 포인트 추가 위치는 여기!
-      addDebugPoint(128.3649, 38.6243);
+      addDebugPoint(126.9780, 37.5665);  // 서울 (경도, 위도)
 
       fetch('countries.geojson')
         .then(res => res.json())
