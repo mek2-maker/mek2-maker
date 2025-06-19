@@ -51,25 +51,26 @@
     import TWEEN             from './libs/tween.esm.js';
     import Papa              from 'https://cdn.jsdelivr.net/npm/papaparse@5.3.2/+esm';
 
-    // 깃허브 리포지토리에 올린 flag/ 폴더를 가리키게 수정하세요
-    const FLAG_CDN = 'https://cdn.jsdelivr.net/gh/mek2-maker/mek2-maker@main/flag';
-
+    // 한 번만 PNG→JPG fallback, 무한 재시도 방지
     function makeFlagImg(code, alt) {
       const img = document.createElement('img');
       img.alt = alt;
-      img.src = `${FLAG_CDN}/${code}.png`;
-      img.onerror = () => { img.onerror = null; img.src = `${FLAG_CDN}/${code}.jpg`; };
+      img.src = `./flag/${code}.png`;
+      img.onerror = () => {
+        img.onerror = null;
+        img.src = `./flag/${code}.jpg`;
+      };
       return img;
     }
 
     let scene, camera, renderer, controls;
     let geoJSON, infoData, curLine, curFill;
-    const R = 1, FILL_R = R + 0.0001, LINE_R = R + 0.0002;
+    const R = 1, FILL_R = R+0.0001, LINE_R = R+0.0002;
     const msgDiv = document.getElementById('message');
 
     function showMessage(msg, type='error') {
       msgDiv.textContent = msg;
-      msgDiv.style.color = (type==='error' ? 'red' : 'green');
+      msgDiv.style.color = type==='error' ? 'red' : 'green';
       setTimeout(()=> msgDiv.textContent = '', 3000);
     }
 
@@ -95,7 +96,7 @@
         ? f.geometry.coordinates.flat()
         : f.geometry.coordinates.flat(2);
       let [minLon,maxLon,minLat,maxLat] = [180,-180,90,-90];
-      coords.forEach(([lon,lat])=>{
+      coords.forEach(([lon,lat]) => {
         minLon = Math.min(minLon, lon);
         maxLon = Math.max(maxLon, lon);
         minLat = Math.min(minLat, lat);
@@ -109,8 +110,8 @@
       const polys = feature.geometry.type==='Polygon'
         ? [feature.geometry.coordinates]
         : feature.geometry.coordinates;
-      polys.forEach(poly=> poly.forEach(ring=>{
-        const pts = ring.map(([lon,lat])=> lonLatToXYZ(lon,lat,LINE_R));
+      polys.forEach(poly => poly.forEach(ring => {
+        const pts = ring.map(([lon,lat]) => lonLatToXYZ(lon,lat,LINE_R));
         if(pts.length && !pts[0].equals(pts[pts.length-1])) pts.push(pts[0].clone());
         const geom = new THREE.BufferGeometry().setFromPoints(pts);
         grp.add(new THREE.Line(geom, new THREE.LineBasicMaterial({color})));
@@ -124,8 +125,8 @@
       const polys = feature.geometry.type==='Polygon'
         ? [feature.geometry.coordinates]
         : feature.geometry.coordinates;
-      polys.forEach(poly=>{
-        const rings2D = poly.map(ring=> ring.map(([lon,lat])=>[
+      polys.forEach(poly => {
+        const rings2D = poly.map(ring => ring.map(([lon,lat]) => [
           (lon-centerLon)*Math.PI/180,
           (lat-centerLat)*Math.PI/180
         ]));
@@ -134,14 +135,13 @@
           if(i>0) holes.push(off);
           r.forEach(([x,y])=>{ verts.push(x,y); off++; });
         });
-        if(verts.length<6) return;
-        const indices = earcut(verts, holes, 2);
-        const pos = [];
-        indices.forEach(i=>{
-          const x=verts[2*i], y=verts[2*i+1];
+        if(verts.length < 6) return;
+        const idxs = earcut(verts, holes, 2), pos=[];
+        idxs.forEach(i => {
+          const x = verts[2*i], y = verts[2*i+1];
           const lon = centerLon + x*180/Math.PI;
           const lat = centerLat + y*180/Math.PI;
-          const v = lonLatToXYZ(lon, lat, FILL_R);
+          const v = lonLatToXYZ(lon,lat,FILL_R);
           pos.push(v.x,v.y,v.z);
         });
         const geom = new THREE.BufferGeometry();
@@ -156,16 +156,16 @@
 
     function updateLeftPanel() {
       const left = document.getElementById('left-info');
-      const info = infoData.find(i=>i.iso2==='kr');
-      left.innerHTML = info ? '' : 'No data';
-      if(!info) return;
+      const kor = infoData.find(i=>i.iso2==='kr');
+      left.innerHTML = kor ? '' : 'No data';
+      if(!kor) return;
       left.appendChild(makeFlagImg('kr','Republic of Korea'));
       left.insertAdjacentHTML('beforeend', `
         <strong>Republic of Korea</strong><br>
-        Capital: ${info.capital}<br>
-        Area: ${info.area_km2.toLocaleString()} km²<br>
-        Pop: ${info.pop_jul_total.toLocaleString()}<br>
-        GDP: ${info.gdp.toLocaleString()} $
+        Capital: ${kor.capital}<br>
+        Area: ${kor.area_km2.toLocaleString()} km²<br>
+        Pop: ${kor.pop_jul_total.toLocaleString()}<br>
+        GDP: ${kor.gdp.toLocaleString()} $
       `);
     }
 
@@ -175,8 +175,8 @@
       const right = document.getElementById('right-info');
       right.innerHTML = info ? '' : 'No data';
       if(!info) return;
-      const name = code==='kr'?'Republic of Korea':info.eng_name;
-      right.appendChild(makeFlagImg(code,name+' Flag'));
+      const name = code==='kr' ? 'Republic of Korea' : info.eng_name;
+      right.appendChild(makeFlagImg(code, name+' Flag'));
       right.insertAdjacentHTML('beforeend', `
         <strong>${name}</strong><br>
         Capital: ${info.capital}<br>
@@ -197,68 +197,70 @@
       scene.add(curLine,curFill);
       updateLeftPanel(); updateRightPanel(f);
       const {centerLon,centerLat} = getCenterOfFeature(f);
-      const tgt = lonLatToXYZ(centerLon,centerLat,R+1.5);
       new TWEEN.Tween(camera.position)
-        .to({ x:tgt.x, y:tgt.y, z:tgt.z }, 800)
+        .to({...lonLatToXYZ(centerLon,centerLat,R+1.5)},800)
         .easing(TWEEN.Easing.Quadratic.Out).start();
     }
 
     async function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.1,100);
+      scene    = new THREE.Scene();
+      camera   = new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,100);
       renderer = new THREE.WebGLRenderer({antialias:true});
-      renderer.setSize(window.innerWidth,window.innerHeight);
+      renderer.setSize(innerWidth,innerHeight);
       document.body.appendChild(renderer.domElement);
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true; controls.dampingFactor = 0.05;
       controls.rotateSpeed = 0.3;
 
-      // 지구본
-      const tex = new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg');
-      scene.add(new THREE.Mesh(new THREE.SphereGeometry(R,64,64), new THREE.MeshBasicMaterial({map:tex})));
+      // Globe
+      scene.add(new THREE.Mesh(
+        new THREE.SphereGeometry(R,64,64),
+        new THREE.MeshBasicMaterial({map:new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg')})
+      ));
 
-      // CSV 로딩
-      const csv = await fetch('country_info_198.csv').then(r=>r.text());
-      infoData = Papa.parse(csv,{header:true,skipEmptyLines:true,transformHeader:h=>h.replace(/^\uFEFF/,'').trim().toLowerCase()})
+      // load data
+      const txt = await fetch('country_info_198.csv').then(r=>r.text());
+      infoData = Papa.parse(txt,{header:true,skipEmptyLines:true,
+        transformHeader:h=>h.replace(/^\uFEFF/,'').trim().toLowerCase()})
         .data.map(r=>({
-          iso2:r.iso2.toLowerCase(), eng_name:r.eng_name,
-          area_km2:+r.area_km2, pop_jul_total:+r.pop_jul_total,
-          gdp:+r.gdp, capital:r.capital
+          iso2:r.iso2.toLowerCase(),
+          eng_name:r.eng_name,
+          area_km2:+r.area_km2,
+          pop_jul_total:+r.pop_jul_total,
+          gdp:+r.gdp,
+          capital:r.capital
         }));
-
-      // GeoJSON
       geoJSON = await fetch('countries.geojson').then(r=>r.json());
-      const korF = geoJSON.features.find(f=>f.properties.ADMIN.toLowerCase().includes('korea'));
+      const korF = geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase().includes('korea'));
       koreaLine = drawBoundary(korF,0x0000ff);
       koreaFill = drawFill(korF,0x0000ff);
       scene.add(koreaLine,koreaFill);
 
-      // datalist
-      geoJSON.features.forEach(f=>{
-        const opt = document.createElement('option');
-        opt.value = f.properties.ADMIN;
+      // populate datalist
+      geoJSON.features.forEach(ff=>{
+        const opt=document.createElement('option');
+        opt.value=ff.properties.ADMIN;
         document.getElementById('country-names').appendChild(opt);
       });
 
-      // 초기 뷰
+      // initial
       displayCountry(korF);
       const {centerLon,centerLat} = getCenterOfFeature(korF);
       camera.position.copy(lonLatToXYZ(centerLon,centerLat,R+1.5));
       controls.target.set(0,0,0);
 
-      // 검색 버튼
       document.getElementById('searchBtn').onclick = ()=>{
-        const q = document.getElementById('iso-code').value.trim().toLowerCase();
-        let f = geoJSON.features.find(f=>f.properties.ADMIN.toLowerCase()===q);
-        if(!f) f = geoJSON.features.find(f=>f.properties.ADMIN.toLowerCase().includes(q));
+        const q=document.getElementById('iso-code').value.trim().toLowerCase();
+        let f=geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase()===q);
+        if(!f) f=geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase().includes(q));
         displayCountry(f);
       };
 
       animate();
       window.addEventListener('resize',()=>{
-        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.aspect=innerWidth/innerHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth,window.innerHeight);
+        renderer.setSize(innerWidth,innerHeight);
       });
     }
 
