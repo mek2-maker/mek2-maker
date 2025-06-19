@@ -86,12 +86,12 @@
       const left = document.getElementById('left-info');
       const korea = infoData.find(i => (i.Name||'').toLowerCase().includes('korea'));
       left.innerHTML = korea
-        ? `<img src="./flag/${korea.ISO2}.jpg">
+        ? <img src="./flag/${korea.ISO2}.jpg">
            <strong>${korea.Name}</strong><br>
            수도: ${korea.Capital}<br>
            면적: ${korea.Area || '정보 없음'}<br>
            인구: ${korea.Population}<br>
-           GDP: ${korea.GDP}`
+           GDP: ${korea.GDP}
         : '대한민국 정보 없음';
     }
 
@@ -99,35 +99,34 @@
       const right = document.getElementById('right-info');
       const info = infoData.find(i => (i.Name || '').toLowerCase().includes(name.toLowerCase()));
       right.innerHTML = info
-        ? `<img src="./flag/${info.ISO2}.gif"
+        ? <img src="./flag/${info.ISO2}.gif"
                  onerror="this.onerror=null;this.src='./flag/${info.ISO2}.jpg';this.onerror=e=>e.target.src='./flag/${info.ISO2}.png';"
                  alt="${info.Name}">
            <strong>${info.Name}</strong><br>
            수도: ${info.Capital}<br>
            면적: ${info.Area || '정보 없음'}<br>
            인구: ${info.Population}<br>
-           GDP: ${info.GDP}`
+           GDP: ${info.GDP}
         : '국가 정보 없음';
     }
 
-    function drawPolygonFillWithRadius(feature, colorHex, radius) {
+    function drawPolygonFill(feature, colorHex) {
       const meshGroup = new THREE.Group();
       const geom = feature.geometry;
       const bounds = getCenterOfFeature(feature);
-    
+
       const draw = coords => {
-        const outer = polygonToSphereMesh([coords[0]], bounds, radius, colorHex);
+        const outer = polygonToSphereMesh([coords[0]], bounds, R+0.01, colorHex);
         if (outer) meshGroup.add(outer);
-    
+
         for (let i = 1; i < coords.length; i++) {
-          const holePoly = polygonToSphereMesh([coords[i]], bounds, radius, colorHex);
+          const holePoly = polygonToSphereMesh([coords[i]], bounds, R+0.01, colorHex);
           if (holePoly) meshGroup.add(holePoly);
         }
       };
-    
+
       if (geom.type === 'Polygon') draw(geom.coordinates);
       else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(draw);
-    
       return meshGroup;
     }
 
@@ -185,43 +184,21 @@
     }
 
     function drawKorea(feature) {
-      // 경계선은 약간 바깥쪽 (R + 0.02)
-      koreaBoundaryLine = drawBoundaryWithRadius(feature, 0x0000ff, R + 0.02);
+      koreaBoundaryLine = drawBoundary(feature, 0x0000ff);
       scene.add(koreaBoundaryLine);
-    
-      // 다중 폴리곤일 경우 겹침 방지를 위해 각 폴리곤마다 조금씩 다른 반지름 사용
-      koreaFillMesh = new THREE.Group();
-      const coordsArray = feature.geometry.coordinates;
-    
-      coordsArray.forEach((polygon, idx) => {
-        const singleFeature = {
-          type: "Feature",
-          properties: feature.properties,
-          geometry: {
-            type: "Polygon",
-            coordinates: polygon
-          }
-        };
-        const radiusOffset = 0.005 + (idx % 3) * 0.005;  // R+0.01, R+0.015, R+0.02
-        const mesh = drawPolygonFillWithRadius(singleFeature, 0x0000ff, R + radiusOffset);
-        if (mesh) koreaFillMesh.add(mesh);
-      });
-    
+      koreaFillMesh = drawPolygonFill(feature, 0x0000ff);
       scene.add(koreaFillMesh);
     }
 
-    function drawBoundaryWithRadius(feature, colorHex, radius) {
+    function drawBoundary(feature, colorHex) {
       const group = new THREE.Group();
       const geom = feature.geometry;
-    
       const draw = ring => {
-        const pts = ring.map(([lon, lat]) => lonLatToXYZ(lon, lat, radius));
+        const pts = ring.map(([lon, lat]) => lonLatToXYZ(lon, lat, R + 0.02));
         group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: colorHex })));
       };
-    
       if (geom.type === 'Polygon') geom.coordinates.forEach(draw);
       else geom.coordinates.flat().forEach(draw);
-    
       return group;
     }
 
