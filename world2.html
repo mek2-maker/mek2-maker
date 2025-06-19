@@ -230,7 +230,7 @@
       updateRightPanel(feature);
 
       const c = getCenterOfFeature(feature);
-      const tgt = lonLatToXYZ(c.centerLon, c.centerLat, R+0.8);
+      const tgt = lonLatToXYZ(c.centerLon, c.centerLat, R+1.5);
       new TWEEN.Tween(camera.position)
         .to({x:tgt.x,y:tgt.y,z:tgt.z},800)
         .easing(TWEEN.Easing.Quadratic.Out)
