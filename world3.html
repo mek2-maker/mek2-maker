@@ -55,11 +55,27 @@
       const img = document.createElement('img');
       img.alt = alt;
       const upper = code.toUpperCase();
-      img.src = `./flag/${upper}.png`;      // 먼저 PNG 시도
+      const exts  = ['gif', 'png', 'jpg'];
+      let idx = 0;
+
+      // 첫 시도: .gif
+      img.src = `./flag/${upper}.${exts[idx++]}`;
+
       img.onerror = () => {
-        img.onerror = null;                  // 두 번째 실패 방지
-        img.src     = `./flag/${upper}.jpg`; // JPG로 한 번만 fallback
+        if (idx < exts.length) {
+          // 다음 확장자로 경로 변경
+          img.onerror = null;                // 중복 호출 방지
+          img.src     = `./flag/${upper}.${exts[idx++]}`;
+          // 다음 실패에도 다시 onerror 걸어주기
+          img.onerror = () => {
+            if (idx < exts.length) {
+              img.onerror = null;
+              img.src     = `./flag/${upper}.${exts[idx++]}`;
+            }
+          };
+        }
       };
+
       return img;
     }
 
