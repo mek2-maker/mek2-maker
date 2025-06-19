@@ -54,10 +54,11 @@
     function makeFlagImg(code, alt) {
       const img = document.createElement('img');
       img.alt = alt;
-      img.src = `./flag/${code}.png`;
+      const upper = code.toUpperCase();
+      img.src = `./flag/${upper}.png`;      // 먼저 PNG 시도
       img.onerror = () => {
-        img.onerror = null;
-        img.src = `./flag/${code}.jpg`;
+        img.onerror = null;                  // 두 번째 실패 방지
+        img.src     = `./flag/${upper}.jpg`; // JPG로 한 번만 fallback
       };
       return img;
     }
