@@ -9,11 +9,10 @@
     html, body { margin: 0; height: 100%; }
     #map { width: 100%; height: 100%; }
 
-    /* ✅ 고정 이미지 박스 (북한 위치 근처) */
     #fixed-image-box {
       position: absolute;
-      top: 30px;
-      right: 30px;
+      top: 20px;
+      right: 20px;
       width: 200px;
       background: white;
       border: 2px solid #444;
@@ -22,8 +21,10 @@
       box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
       font-family: sans-serif;
     }
+
     #fixed-image-box img {
       width: 100%;
+      height: auto;
       max-width: 100%;
     }
 
@@ -34,39 +35,35 @@
 </head>
 <body>
 <div id="map"></div>
-<div id="fixed-image-box"><!-- 이미지 표시 위치 --></div>
+<div id="fixed-image-box"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  const map = L.map('map', { boxZoom: false }).setView([45, 127.8], 6);
-  map.boxZoom.disable();
+  const map = L.map('map', {
+    minZoom: 6,
+    maxZoom: 6,
+    scrollWheelZoom: false,
+    dragging: true,
+    boxZoom: false
+  }).setView([40, 127.8], 6);
+
+  // ✅ 패닝으로 시각적으로 대한민국을 아래로 보이게
+  setTimeout(() => {
+    map.panBy([0, -100]);  // Y축 위로 100px만큼 이동
+  }, 200);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
-  // ✅ 한글 → 실제 JPG 파일명
   const nameToFileMap = {
-    "서울특별시": "Seoul.jpg",
-    "부산광역시": "Busan.jpg",
-    "대구광역시": "Daegu.jpg",
-    "인천광역시": "Incheon.jpg",
-    "광주광역시": "Gwangju.jpg",
-    "대전광역시": "Daejeon.jpg",
-    "울산광역시": "Ulsan.jpg",
-    "세종특별자치시": "Sejong.jpg",
-    "경기도": "Gyeonggi-do.jpg",
-    "강원도": "Gangwon State.jpg",
-    "충청북도": "Chungcheongbuk-do.jpg",
-    "충청남도": "Chungcheongnam-do.jpg",
-    "전라북도": "Jeonbuk State.jpg",
-    "전라남도": "Jeollanam-do.jpg",
-    "경상북도": "Gyeongsangbuk-do.jpg",
+    "경상북도": "Geyongsangbuk-do.jpg",
     "경상남도": "Gyeongsangnam-do.jpg",
-    "제주특별자치도": "Jeju Special Self-Governing Province.jpg"
+    "충청북도": "Chungchengbuk-do.jpg",
+    "충청남도": "Chungchengnam-do.jpg",
+    "강원도": "Gangwon State.jpg"
   };
 
-  // ✅ RGB 색상 (영문 이름 기준)
   const regionColors = {
     "Seoul": "rgb(0, 159, 232)",
     "Busan": "rgb(230, 61, 125)",
@@ -91,20 +88,20 @@
     .then(res => res.json())
     .then(data => {
       L.geoJSON(data, {
-        style: feature => ({
+        style: () => ({
           color: "black",
           weight: 2,
           fillOpacity: 0
         }),
         onEachFeature: function (feature, layer) {
           const korName = feature.properties.sd_name;
-          const engFileName = nameToFileMap[korName];
-          const fillColor = regionColors[engFileName?.replace(".jpg", "").replace("_1", "")] || "#cccccc";
+          const fileName = nameToFileMap[korName];
+          const fillColor = regionColors[fileName?.replace(".jpg", "").replace("_1", "")] || "#cccccc";
 
           layer.on("mouseover", () => {
             layer.setStyle({
               fillColor: fillColor,
-              fillOpacity: 0.9
+              fillOpacity: 1.0
             });
           });
 
@@ -113,12 +110,11 @@
           });
 
           layer.on("click", () => {
-            const target = document.getElementById("fixed-image-box");
-            if (engFileName) {
-              const html = `<h4>${korName}</h4><img src="sido/${engFileName}" alt="${korName}">`;
-              target.innerHTML = html;
+            const box = document.getElementById("fixed-image-box");
+            if (fileName) {
+              box.innerHTML = `<h4>${korName}</h4><img src="sido/${fileName}" alt="${korName}">`;
             } else {
-              target.innerHTML = `<h4>${korName}</h4><p>이미지 없음</p>`;
+              box.innerHTML = `<h4>${korName}</h4><p>이미지 없음</p>`;
             }
           });
         }
