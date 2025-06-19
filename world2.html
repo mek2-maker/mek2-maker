@@ -25,7 +25,7 @@
       margin-left:10px; color:red; font-size:0.9em;
     }
     #info-panel {
-      position:absolute; bottom:0; left:0; width:100%; display:flex;
+      position:absolute; bottom:0; left:0; width:100%; height:160px; display:flex;
       background:rgba(255,255,255,0.95); font-family:sans-serif;
     }
     .info {
@@ -230,7 +230,7 @@
       updateRightPanel(feature);
 
       const c = getCenterOfFeature(feature);
-      const tgt = lonLatToXYZ(c.centerLon, c.centerLat, R+0.4);
+      const tgt = lonLatToXYZ(c.centerLon, c.centerLat, R+0.8);
       new TWEEN.Tween(camera.position)
         .to({x:tgt.x,y:tgt.y,z:tgt.z},800)
         .easing(TWEEN.Easing.Quadratic.Out)
