@@ -80,61 +80,235 @@
       label.textContent = `${name}, ${timeStr}`;
     }
 
-    function updateLeftPanel() {
-      const el = document.getElementById('left-info');
-      updateTimeLabel(el, 'kr', 'Republic of Korea');
+    function makeFlagImg(code, alt) {
+      const img = document.createElement('img');
+      img.alt = alt;
+      const upper = code.toUpperCase();
+      const exts = ['gif', 'png', 'jpg'];
+      let idx = 0;
+      img.src = `./flag/${upper}.${exts[idx++]}`;
+      img.onerror = function tryNext() {
+        if (idx < exts.length) {
+          img.onerror = tryNext;
+          img.src = `./flag/${upper}.${exts[idx++]}`;
+        }
+      };
+      return img;
     }
 
-    function updateRightPanel(feature) {
-      const el = document.getElementById('right-info');
-      if (!feature) return;
-      const iso2 = feature.properties.ISO_A2.toLowerCase();
-      const name = feature.properties.ADMIN;
-      updateTimeLabel(el, iso2, name);
-    }
+    let scene, camera, renderer, controls;
+    let geoJSON, infoData, curLine, curFill;
+    const R = 1;
+    const FILL_R = R + 0.0001;
+    const LINE_R = R + 0.0002;
+    const msgDiv = document.getElementById('message');
 
     function showMessage(msg, type='error'){
-      const msgDiv = document.getElementById('message');
       msgDiv.textContent = msg;
       msgDiv.style.color = (type==='error' ? 'red' : 'green');
       setTimeout(()=>msgDiv.textContent='', 3000);
     }
 
-    function displayCountry(feature){
-      if(!feature){ showMessage('Country not found','error'); return; }
-      showMessage(`${feature.properties.ADMIN} selected`,'success');
-      window.currentFeature = feature;
-      updateLeftPanel();
-      updateRightPanel(feature);
+    function lonLatToXYZ(lon, lat, r=R){
+      const φ = (90 - lat)*Math.PI/180;
+      const θ = (lon + 180)*Math.PI/180;
+      return new THREE.Vector3(
+        -r * Math.sin(φ)*Math.cos(θ),
+         r * Math.cos(φ),
+         r * Math.sin(φ)*Math.sin(θ)
+      );
     }
 
-    async function init() {
+    function getCenterOfFeature(f){
+      const coords = f.geometry.type==='Polygon'
+        ? f.geometry.coordinates.flat()
+        : f.geometry.coordinates.flat(2);
+      let [minLon,maxLon,minLat,maxLat] = [180,-180,90,-90];
+      coords.forEach(([lon,lat])=>{
+        minLon = Math.min(minLon, lon);
+        maxLon = Math.max(maxLon, lon);
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+      });
+      return {
+        centerLon:(minLon+maxLon)/2,
+        centerLat:(minLat+maxLat)/2
+      };
+    }
+
+    function drawBoundary(feature, color){
+      const grp = new THREE.Group();
+      const polys = feature.geometry.type==='Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+      polys.forEach(poly=>{
+        poly.forEach(ring=>{
+          const pts = ring.map(([lon,lat])=> lonLatToXYZ(lon,lat,LINE_R) );
+          if(pts.length && !pts[0].equals(pts[pts.length-1])){
+            pts.push(pts[0].clone());
+          }
+          const geom = new THREE.BufferGeometry().setFromPoints(pts);
+          grp.add(new THREE.Line(geom, new THREE.LineBasicMaterial({color})));
+        });
+      });
+      return grp;
+    }
+
+    function drawFill(feature, color){
+      const grp = new THREE.Group();
+      const {centerLon,centerLat} = getCenterOfFeature(feature);
+      const polys = feature.geometry.type==='Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+      polys.forEach(poly=>{
+        const rings2D = poly.map(ring=>
+          ring.map(([lon,lat])=>[
+            (lon-centerLon)*Math.PI/180,
+            (lat-centerLat)*Math.PI/180
+          ])
+        );
+        const verts2D = [], holes=[]; let off=0;
+        rings2D.forEach((r,i)=>{
+          if(i>0) holes.push(off);
+          r.forEach(([x,y])=>{ verts2D.push(x,y); off++; });
+        });
+        if(verts2D.length<6) return;
+        const idxs = earcut(verts2D, holes, 2), pos=[];
+        idxs.forEach(i=>{
+          const x=verts2D[2*i], y=verts2D[2*i+1];
+          const lon=centerLon + x*180/Math.PI;
+          const lat=centerLat + y*180/Math.PI;
+          const v=lonLatToXYZ(lon,lat,FILL_R);
+          pos.push(v.x,v.y,v.z);
+        });
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+        grp.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+          color, transparent:true, opacity:0.5,
+          side:THREE.FrontSide, depthTest:false, depthWrite:false
+        })));
+      });
+      return grp;
+    }
+
+    function updateLeftPanel(){
+      const el = document.getElementById('left-info');
+      const kor = infoData.find(i=>i.iso2==='kr');
+      el.innerHTML = kor ? '' : 'No data';
+      if (!kor) return;
+      el.appendChild(makeFlagImg('kr','Republic of Korea'));
+      el.insertAdjacentHTML('beforeend', `
+        <strong>Republic of Korea</strong><br>
+        Capital: ${kor.capital}<br>
+        Area: ${kor.area_km2.toLocaleString()} km²<br>
+        Pop: ${kor.pop_jul_total.toLocaleString()}<br>
+        GDP: ${kor.gdp.toLocaleString()} $
+      `);
+      updateTimeLabel(el, 'kr', 'Republic of Korea');
+    }
+
+    function updateRightPanel(feature){
+      const el = document.getElementById('right-info');
+      const code = feature.properties.ISO_A2.toLowerCase();
+      const info = infoData.find(i=>i.iso2===code);
+      el.innerHTML = info ? '' : 'No data';
+      if (!info) return;
+      const name = info.eng_name;
+      el.appendChild(makeFlagImg(code, name + ' Flag'));
+      el.insertAdjacentHTML('beforeend', `
+        <strong>${name}</strong><br>
+        Capital: ${info.capital}<br>
+        Area: ${info.area_km2.toLocaleString()} km²<br>
+        Pop: ${info.pop_jul_total.toLocaleString()}<br>
+        GDP: ${info.gdp.toLocaleString()} $
+      `);
+      updateTimeLabel(el, code, name);
+    }
+
+    function displayCountry(feature){
+      if(!feature){ showMessage('Country not found','error'); return; }
+      window.currentFeature = feature; // ✅ 필수 추가
+      showMessage(`${feature.properties.ADMIN} selected`,'success');
+      if(curLine) scene.remove(curLine);
+      if(curFill) scene.remove(curFill);
+      const isKR = feature.properties.ISO_A2.toLowerCase()==='kr';
+      curLine = drawBoundary(feature, isKR?0x0000ff:0xff0000);
+      curFill = drawFill(feature, isKR?0x0000ff:0xff0000);
+      scene.add(curLine,curFill);
+      updateLeftPanel();
+      updateRightPanel(feature);
+      const { centerLon, centerLat } = getCenterOfFeature(feature);
+      const tgt = lonLatToXYZ(centerLon, centerLat, R + 1.5);
+      new TWEEN.Tween(camera.position)
+        .to({ x: tgt.x, y: tgt.y, z: tgt.z }, 800)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .start();
+    }
+
+    async function init(){
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.1,100);
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth,window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true; controls.dampingFactor = 0.05;
+      controls.rotateSpeed = 0.3;
+
+      const tex = new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg');
+      scene.add(new THREE.Mesh(
+        new THREE.SphereGeometry(R,64,64),
+        new THREE.MeshBasicMaterial({map:tex})
+      ));
+
       const csvText = await fetch('country_info_198.csv').then(r=>r.text());
-      const infoData = Papa.parse(csvText, {
+      infoData = Papa.parse(csvText, {
         header:true, skipEmptyLines:true,
         transformHeader:h=>h.replace(/^\uFEFF/,'').trim().toLowerCase()
-      }).data;
+      }).data.map(r=>({
+        iso2: r.iso2.toLowerCase(),
+        eng_name: r.eng_name,
+        area_km2: +r.area_km2 || 0,
+        pop_jul_total: +r.pop_jul_total || 0,
+        gdp: +r.gdp || 0,
+        capital: r.capital
+      }));
 
-      const geoJSON = await fetch('countries.geojson').then(r=>r.json());
-      const korF = geoJSON.features.find(f =>
+      geoJSON = await fetch('countries.geojson').then(r=>r.json());
+      const korF = geoJSON.features.find(f=>
         f.properties.ADMIN.toLowerCase().includes('korea')
       );
+      displayCountry(korF);
+      const {centerLon,centerLat} = getCenterOfFeature(korF);
+      camera.position.copy(lonLatToXYZ(centerLon,centerLat,R+1.5));
+      controls.target.set(0,0,0);
 
       const dl = document.getElementById('country-names');
       geoJSON.features.forEach(f=>{
-        const opt=document.createElement('option');
-        opt.value=f.properties.ADMIN;
+        const opt = document.createElement('option');
+        opt.value = f.properties.ADMIN;
         dl.appendChild(opt);
       });
 
-      displayCountry(korF);
-
       document.getElementById('searchBtn').onclick = ()=>{
         const q = document.getElementById('iso-code').value.trim().toLowerCase();
-        let f = geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase() === q);
+        let f = geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase()===q);
         if(!f) f = geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase().includes(q));
         displayCountry(f);
       };
+
+      window.addEventListener('resize', ()=>{
+        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth,window.innerHeight);
+      });
+
+      requestAnimationFrame(function animate(t){
+        requestAnimationFrame(animate);
+        TWEEN.update(t);
+        controls.update();
+        renderer.render(scene, camera);
+      });
 
       setInterval(() => {
         updateLeftPanel();
