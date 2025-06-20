@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>3D 지구본 – 국가별 실시간 시계</title>
+  <title>3D Globe – Country Fill with Local Times</title>
   <style>
     body { margin:0; overflow:hidden; }
     #overlay {
@@ -10,42 +10,45 @@
       background:rgba(255,255,255,0.9);
       padding:8px; border-radius:4px;
       font-family:sans-serif; z-index:10;
-      display:flex; gap:10px; align-items:center;
+      display:flex; gap:5px; align-items:center;
     }
-    #overlay input { width:140px; padding:4px; border:1px solid #ccc; border-radius:3px; }
-    #overlay button { padding:4px 8px; border:1px solid #007bff; background-color:#007bff; color:#fff; border-radius:3px; cursor:pointer; }
+    #overlay input {
+      width:140px; padding:4px; border:1px solid #ccc; border-radius:3px;
+    }
+    #overlay button {
+      padding:4px 8px; border:1px solid #007bff;
+      background-color:#007bff; color:#fff; border-radius:3px;
+      cursor:pointer;
+    }
     #overlay button:hover { background-color:#0056b3; }
     #message { margin-left:10px; color:red; font-size:0.9em; }
-    #info-panel { position:absolute; bottom:0; left:0; width:100%; height:240px; display:flex; background:rgba(255,255,255,0.95); font-family:sans-serif; }
+    #info-panel {
+      position:absolute; bottom:0; left:0; width:100%; height:200px; display:flex;
+      background:rgba(255,255,255,0.95); font-family:sans-serif;
+    }
     .info { flex:1; padding:10px; text-align:center; position:relative; }
     .info img { max-height:60px; margin-bottom:6px; }
-    .time-label { position:absolute; top:10px; width:100%; font-size:0.9em; color:#333; }
-    .info-content { margin-top:24px; }
+    .time-label { position:absolute; top:5px; width:100%; font-size:0.9em; color:#333; }
   </style>
 </head>
 <body>
-
   <div id="overlay">
-    <input id="iso-code" placeholder="국가 이름 입력" list="country-names">
-    <button id="searchBtn">검색</button>
+    <label for="iso-code" style="display:none;">Country</label>
+    <input id="iso-code" placeholder="Enter country name" list="country-names">
+    <button id="searchBtn">Search</button>
     <div id="message"></div>
-    <!-- datalist는 overlay 내부가 아니라 별도 위치에 둬도 상관없습니다 -->
     <datalist id="country-names"></datalist>
   </div>
 
   <div id="info-panel">
-    <div class="info">
-      <div id="time-kr" class="time-label"></div>
-      <div id="left-content" class="info-content"></div>
+    <div id="left-info" class="info">
+      <div id="time-left" class="time-label"></div>
     </div>
-    <div class="info">
-      <div id="time-selected" class="time-label"></div>
-      <div id="right-content" class="info-content"></div>
+    <div id="right-info" class="info">
+      <div id="time-right" class="time-label"></div>
     </div>
   </div>
 
-  <!-- Three.js, OrbitControls, earcut, TWEEN, PapaParse 등은
-       실제 호스팅 경로에 맞게 절대 URL 또는 CDN 경로로 변경하세요. -->
   <script type="module">
     import * as THREE        from './libs/three.module.js';
     import { OrbitControls } from './libs/OrbitControls.js';
@@ -53,292 +56,185 @@
     import TWEEN             from './libs/tween.esm.js';
     import Papa              from 'https://cdn.jsdelivr.net/npm/papaparse@5.3.2/+esm';
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      const R      = 1;
-      const FILL_R = R + 0.0001;
-      const LINE_R = R + 0.0002;
-      let scene, camera, renderer, controls, geoJSON, infoData, curLine, curFill;
+    // === 플래그 이미지 무한 반복 방지 ===
+    function makeFlagImg(code, alt) {
+      const img = document.createElement('img');
+      img.alt = alt;
+      const upper = code.toUpperCase();
+      const exts  = ['gif', 'png', 'jpg'];
+      let idx = 0;
+      img.src = `./flag/${upper}.${exts[idx++]}`;
+      img.onerror = () => {
+        if (idx < exts.length) {
+          img.onerror = null;
+          img.src     = `./flag/${upper}.${exts[idx++]}`;
+          img.onerror = () => {
+            if (idx < exts.length) {
+              img.onerror = null;
+              img.src     = `./flag/${upper}.${exts[idx++]}`;
+            }
+          };
+        }
+      };
+      return img;
+    }
 
-      // 타임존 매핑
-      const timeZoneMap = {
-        kr: 'Asia/Seoul', de: 'Europe/Berlin', fr: 'Europe/Paris', us: 'America/New_York',
-        cn: 'Asia/Shanghai', jp: 'Asia/Tokyo', mx: 'America/Mexico_City', ar: 'America/Argentina/Buenos_Aires',
-        br: 'America/Sao_Paulo', cl: 'America/Santiago', co: 'America/Bogota', pe: 'America/Lima',
-        ve: 'America/Caracas', ec: 'America/Guayaquil', bo: 'America/La_Paz', cu: 'America/Havana',
-        do: 'America/Santo_Domingo', uy: 'America/Montevideo', py: 'America/Asuncion', pa: 'America/Panama',
-        cr: 'America/Costa_Rica', gt: 'America/Guatemala', hn: 'America/Tegucigalpa', sv: 'America/El_Salvador',
-        ni: 'America/Managua', bz: 'America/Belize', gy: 'America/Guyana', sr: 'America/Paramaribo',
-        ht: 'America/Port-au-Prince', jm: 'America/Jamaica', tt: 'America/Port_of_Spain', pr: 'America/Puerto_Rico'
+    let scene, camera, renderer, controls;
+    let geoJSON, infoData, curLine, curFill;
+    let koreaLine, koreaFill;
+    const R      = 1;
+    const FILL_R = R + 0.0001;
+    const LINE_R = R + 0.0002;
+    const msgDiv = document.getElementById('message');
+
+    function showMessage(msg, type='error'){
+      msgDiv.textContent = msg;
+      msgDiv.style.color = (type==='error' ? 'red' : 'green');
+      setTimeout(()=>msgDiv.textContent='', 3000);
+    }
+
+    function animate(time){
+      requestAnimationFrame(animate);
+      TWEEN.update(time);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function lonLatToXYZ(lon, lat, r=R){
+      const φ = (90 - lat)*Math.PI/180;
+      const θ = (lon + 180)*Math.PI/180;
+      return new THREE.Vector3(
+        -r * Math.sin(φ)*Math.cos(θ),
+         r * Math.cos(φ),
+         r * Math.sin(φ)*Math.sin(θ)
+      );
+    }
+
+    function getCenterOfFeature(f){
+      const coords = f.geometry.type==='Polygon'
+        ? f.geometry.coordinates.flat()
+        : f.geometry.coordinates.flat(2);
+      let [minLon,maxLon,minLat,maxLat] = [180,-180,90,-90];
+      coords.forEach(([lon,lat])=>{
+        minLon = Math.min(minLon, lon);
+        maxLon = Math.max(maxLon, lon);
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+      });
+      return { centerLon:(minLon+maxLon)/2, centerLat:(minLat+maxLat)/2 };
+    }
+
+    function drawBoundary(feature, color){
+      const grp = new THREE.Group();
+      const polys = feature.geometry.type==='Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+      polys.forEach(poly=> poly.forEach(ring=>{
+        const pts = ring.map(([lon,lat])=>lonLatToXYZ(lon,lat,LINE_R));
+        if(pts.length && !pts[0].equals(pts[pts.length-1])) pts.push(pts[0].clone());
+        const geom = new THREE.BufferGeometry().setFromPoints(pts);
+        grp.add(new THREE.Line(geom, new THREE.LineBasicMaterial({color})));    
+      }));
+      return grp;
+    }
+
+    function drawFill(feature, color){
+      const grp = new THREE.Group();
+      const {centerLon,centerLat} = getCenterOfFeature(feature);
+      const polys = feature.geometry.type==='Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+      polys.forEach(poly=>{
+        const rings2D = poly.map(ring=> ring.map(([lon,lat])=>[(lon-centerLon)*Math.PI/180,(lat-centerLat)*Math.PI/180]));
+        const verts2D=[], holes=[];
+        rings2D.forEach((r,i)=>{ if(i>0) holes.push(verts2D.length/2); r.forEach(p=>verts2D.push(...p)); });
+        if(verts2D.length<6) return;
+        const idxs = earcut(verts2D,holes,2), pos=[];
+        idxs.forEach(i=>{
+          const x=verts2D[2*i], y=verts2D[2*i+1];
+          const lon=centerLon+x*180/Math.PI, lat=centerLat+y*180/Math.PI;
+          const v=lonLatToXYZ(lon,lat,FILL_R);
+          pos.push(v.x,v.y,v.z);
+        });
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+        grp.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.5,side:THREE.FrontSide,depthTest:false,depthWrite:false})));
+      });
+      return grp;
+    }
+
+    function updateLeftPanel(){
+      const left = document.getElementById('left-info');
+      const kor  = infoData.find(i=>i.iso2==='kr');
+      left.innerHTML = kor ? '' : 'No data';
+      if(!kor) return;
+      left.appendChild(makeFlagImg('kr','Republic of Korea'));
+      left.insertAdjacentHTML('beforeend', `<strong>Republic of Korea</strong><br>Capital: ${kor.capital}<br>Area: ${kor.area_km2.toLocaleString()} km²<br>Pop: ${kor.pop_jul_total.toLocaleString()}<br>GDP: ${kor.gdp.toLocaleString()} $`);
+    }
+
+    function updateRightPanel(feature){
+      const code = feature.properties.ISO_A2.toLowerCase();
+      const info = infoData.find(i=>i.iso2===code);
+      const right = document.getElementById('right-info'); right.innerHTML = info ? '' : 'No data';
+      if(!info) return;
+      const name = code==='kr' ? 'Republic of Korea' : info.eng_name;
+      right.appendChild(makeFlagImg(code,name+' Flag'));
+      right.insertAdjacentHTML('beforeend', `<strong>${name}</strong><br>Capital: ${info.capital}<br>Area: ${info.area_km2.toLocaleString()} km²<br>Pop: ${info.pop_jul_total.toLocaleString()}<br>GDP: ${info.gdp.toLocaleString()} $`);
+    }
+
+    async function init(){
+      scene    = new THREE.Scene();
+      camera   = new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.1,100);
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth,window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true; controls.dampingFactor = 0.05; controls.rotateSpeed = 0.3;
+
+      // globe
+      const tex = new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg');
+      scene.add(new THREE.Mesh(new THREE.SphereGeometry(R,64,64), new THREE.MeshBasicMaterial({map:tex})));
+
+      // data load
+      const csvText = await fetch('country_info_198.csv').then(r=>r.text());
+      infoData = Papa.parse(csvText,{header:true,skipEmptyLines:true,transformHeader:h=>h.replace(/^\uFEFF/,'').trim().toLowerCase()}).data.map(r=>(
+        {iso2:r.iso2.toLowerCase(),eng_name:r.eng_name,area_km2:+r.area_km2||0,pop_jul_total:+r.pop_jul_total||0,gdp:+r.gdp||0,capital:r.capital}
+      ));
+
+      geoJSON = await fetch('countries.geojson').then(r=>r.json());
+      const korF = geoJSON.features.find(f=>f.properties.ADMIN.toLowerCase().includes('korea'));
+      koreaLine = drawBoundary(korF,0x0000ff); koreaFill = drawFill(korF,0x0000ff);
+      scene.add(koreaLine,koreaFill);
+
+      // datalist
+      const dl = document.getElementById('country-names');
+      geoJSON.features.forEach(f=>{const opt=document.createElement('option');opt.value=f.properties.ADMIN;dl.appendChild(opt);});
+
+      displayCountry(korF);
+      const {centerLon,centerLat} = getCenterOfFeature(korF);
+      camera.position.copy(lonLatToXYZ(centerLon,centerLat,R+1.5)); controls.target.set(0,0,0);
+
+      document.getElementById('searchBtn').onclick = ()=>{
+        const q=document.getElementById('iso-code').value.trim().toLowerCase();
+        let f = geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase()===q);
+        if(!f) f=geoJSON.features.find(ff=>ff.properties.ADMIN.toLowerCase().includes(q));
+        displayCountry(f);
       };
 
-      // 메시지 표시
-      function showMessage(msg, type='error') {
-        const msgDiv = document.getElementById('message');
-        msgDiv.textContent = msg;
-        msgDiv.style.color = (type==='error' ? 'red' : 'green');
-        setTimeout(() => msgDiv.textContent = '', 3000);
-      }
+      animate();
+      window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);});
+    }
 
-      // 경도/위도를 3D 좌표로 변환
-      function lonLatToXYZ(lon, lat, r = R) {
-        const φ = (90 - lat) * Math.PI / 180;
-        const θ = (lon + 180) * Math.PI / 180;
-        return new THREE.Vector3(
-          -r * Math.sin(φ) * Math.cos(θ),
-           r * Math.cos(φ),
-           r * Math.sin(φ) * Math.sin(θ)
-        );
-      }
-
-      // 피처 중심 구하기
-      function getCenterOfFeature(f) {
-        const coords = f.geometry.type === 'Polygon'
-          ? f.geometry.coordinates.flat()
-          : f.geometry.coordinates.flat(2);
-        let [minLon, maxLon, minLat, maxLat] = [180, -180, 90, -90];
-        coords.forEach(([lon, lat]) => {
-          minLon = Math.min(minLon, lon);
-          maxLon = Math.max(maxLon, lon);
-          minLat = Math.min(minLat, lat);
-          maxLat = Math.max(maxLat, lat);
-        });
-        return { centerLon: (minLon + maxLon) / 2, centerLat: (minLat + maxLat) / 2 };
-      }
-
-      // SVG 국기 이미지 태그 생성
-      function makeFlagImg(code, alt) {
-        const img = document.createElement('img');
-        img.alt = alt;
-        const upper = code.toUpperCase();
-        const exts  = ['gif','png','jpg'];
-        let idx = 0;
-        img.src = `./flag/${upper}.${exts[idx++]}`;
-        img.onerror = () => {
-          if (idx < exts.length) {
-            img.onerror = null;
-            img.src = `./flag/${upper}.${exts[idx++]}`;
-          }
-        };
-        return img;
-      }
-
-      // 경계선 그리기
-      function drawBoundary(feature, color) {
-        const grp = new THREE.Group();
-        const polys = feature.geometry.type === 'Polygon'
-          ? [feature.geometry.coordinates]
-          : feature.geometry.coordinates;
-        polys.forEach(poly => poly.forEach(ring => {
-          const pts = ring.map(([lon, lat]) => lonLatToXYZ(lon, lat, LINE_R));
-          if (pts.length && !pts[0].equals(pts[pts.length-1])) pts.push(pts[0].clone());
-          const geom = new THREE.BufferGeometry().setFromPoints(pts);
-          grp.add(new THREE.Line(geom, new THREE.LineBasicMaterial({ color })));
-        }));
-        return grp;
-      }
-
-      // 채우기 그리기
-      function drawFill(feature, color) {
-        const grp = new THREE.Group();
-        const { centerLon, centerLat } = getCenterOfFeature(feature);
-        const polys = feature.geometry.type === 'Polygon'
-          ? [feature.geometry.coordinates]
-          : feature.geometry.coordinates;
-        polys.forEach(poly => {
-          const rings2D = poly.map(ring =>
-            ring.map(([lon, lat]) => [(lon - centerLon) * Math.PI/180, (lat - centerLat) * Math.PI/180])
-          );
-          const verts2D = [], holes = [];
-          rings2D.forEach((r, i) => {
-            if (i > 0) holes.push(verts2D.length/2);
-            r.forEach(p => verts2D.push(...p));
-          });
-          if (verts2D.length < 6) return;
-          const idxs = earcut(verts2D, holes, 2), pos = [];
-          idxs.forEach(i => {
-            const x = verts2D[2*i], y = verts2D[2*i+1];
-            const lon = centerLon + x*180/Math.PI, lat = centerLat + y*180/Math.PI;
-            const v = lonLatToXYZ(lon, lat, FILL_R);
-            pos.push(v.x, v.y, v.z);
-          });
-          const geom = new THREE.BufferGeometry();
-          geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-          grp.add(new THREE.Mesh(
-            geom,
-            new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.5, side:THREE.FrontSide, depthTest:false, depthWrite:false })
-          ));
-        });
-        return grp;
-      }
-
-      // 좌측 패널 업데이트
-      function updateLeftPanel() {
-        const left = document.getElementById('left-content');
-        left.innerHTML = '';
-        const kor = infoData.find(i => i.iso2 === 'kr');
-        if (!kor) return;
-        left.appendChild(makeFlagImg('kr', '한국 국기'));
-        left.insertAdjacentHTML('beforeend', `
-          <strong>대한민국</strong><br>
-          수도: ${kor.capital}<br>
-          면적: ${kor.area_km2.toLocaleString()} km²<br>
-          인구: ${kor.pop_jul_total.toLocaleString()}명<br>
-          GDP: $${kor.gdp.toLocaleString()}
-        `);
-      }
-
-      // 우측 패널 업데이트
-      function updateRightPanel(feature) {
-        const code = feature.properties.ISO_A2.toLowerCase();
-        const info = infoData.find(i => i.iso2 === code);
-        const right = document.getElementById('right-content');
-        right.innerHTML = '';
-        if (!info) return;
-        const name = code === 'kr' ? '대한민국' : info.eng_name;
-        right.appendChild(makeFlagImg(code, name + ' 국기'));
-        right.insertAdjacentHTML('beforeend', `
-          <strong>${name}</strong><br>
-          수도: ${info.capital}<br>
-          면적: ${info.area_km2.toLocaleString()} km²<br>
-          인구: ${info.pop_jul_total.toLocaleString()}명<br>
-          GDP: $${info.gdp.toLocaleString()}
-        `);
-      }
-
-      // 시간 업데이트
-      function updateTimes(selectedIso) {
-        const krEl = document.getElementById('time-kr');
-        krEl.textContent = `🇰🇷 대한민국 시간: ${new Date().toLocaleTimeString('ko-KR', { timeZone:'Asia/Seoul', hour12:false })}`;
-        const selEl = document.getElementById('time-selected');
-        const tz = timeZoneMap[selectedIso] || 'UTC';
-        selEl.textContent = `🌐 ${selectedIso.toUpperCase()} 현지 시간: ${new Date().toLocaleTimeString('en-US', { timeZone:tz, hour12:false })}`;
-      }
-
-      // 국가 표시
-      function displayCountry(feature) {
-        if (!feature) { showMessage('국가를 찾을 수 없습니다', 'error'); return; }
-        window.currentFeature = feature;
-        showMessage(`${feature.properties.ADMIN} 선택됨`, 'success');
-        if (curLine) scene.remove(curLine);
-        if (curFill) scene.remove(curFill);
-        const isKR = feature.properties.ISO_A2.toLowerCase() === 'kr';
-        curLine = drawBoundary(feature, isKR ? 0x0000ff : 0xff0000);
-        curFill = drawFill(feature, isKR ? 0x0000ff : 0xff0000);
-        scene.add(curLine, curFill);
-        updateLeftPanel();
-        updateRightPanel(feature);
-        updateTimes(feature.properties.ISO_A2.toLowerCase());
-        const { centerLon, centerLat } = getCenterOfFeature(feature);
-        const tgt = lonLatToXYZ(centerLon, centerLat, R + 1.5);
-        new TWEEN.Tween(camera.position)
-          .to({ x: tgt.x, y: tgt.y, z: tgt.z }, 800)
-          .easing(TWEEN.Easing.Quadratic.Out)
-          .start();
-      }
-
-      // 애니메이션 루프
-      function animate(time) {
-        requestAnimationFrame(animate);
-        TWEEN.update(time);
-        controls.update();
-        renderer.render(scene, camera);
-      }
-
-      // 초기화
-      async function init() {
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-
-        controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.rotateSpeed = 0.3;
-
-        // 지구본 베이스 맵 (경로를 실제 호스팅 URL로 교체)
-        scene.add(new THREE.Mesh(
-          new THREE.SphereGeometry(R, 64, 64),
-          new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load('eo_base_2020_clean_geo_optimized.jpg') })
-        ));
-
-        // 국가 정보 CSV 로드 (경로 확인!)
-        const csvText = await fetch('country_info_198.csv').then(r => {
-          if (!r.ok) throw new Error('country_info CSV 404');
-          return r.text();
-        });
-        infoData = Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          transformHeader: h => h.replace(/^\uFEFF/, '').trim()
-        }).data.map(r => ({
-          iso2: r.iso2.toLowerCase(),
-          eng_name: r.eng_name,
-          area_km2: +r.area_km2,
-          pop_jul_total: +r.pop_jul_total,
-          gdp: +r.gdp,
-          capital: r.capital
-        }));
-
-        // GeoJSON 로드 (경로 확인!)
-        const geoJSONRes = await fetch('countries.geojson');
-        if (!geoJSONRes.ok) throw new Error('countries.geojson 404');
-        geoJSON = await geoJSONRes.json();
-
-        // 한국 경계 먼저 그리기
-        const korF = geoJSON.features.find(f =>
-          f.properties.ADMIN.toLowerCase().includes('korea')
-        );
-        scene.add(drawBoundary(korF, 0x0000ff), drawFill(korF, 0x0000ff));
-
-        // datalist 채우기
-        const dl = document.getElementById('country-names');
-        geoJSON.features.forEach(f => {
-          const opt = document.createElement('option');
-          opt.value = f.properties.ADMIN;
-          dl.appendChild(opt);
-        });
-
-        // 초기 국가
-        displayCountry(korF);
-
-        // 카메라 초기 위치
-        const { centerLon, centerLat } = getCenterOfFeature(korF);
-        camera.position.copy(lonLatToXYZ(centerLon, centerLat, R + 1.5));
-        controls.target.set(0, 0, 0);
-
-        // 검색 버튼
-        document.getElementById('searchBtn').onclick = () => {
-          const q = document.getElementById('iso-code').value.trim().toLowerCase();
-          let f = geoJSON.features.find(ff => ff.properties.ADMIN.toLowerCase() === q);
-          if (!f) f = geoJSON.features.find(ff => ff.properties.ADMIN.toLowerCase().includes(q));
-          displayCountry(f);
-        };
-
-        // 리사이즈 대응
-        window.addEventListener('resize', () => {
-          camera.aspect = window.innerWidth / window.innerHeight;
-          camera.updateProjectionMatrix();
-          renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // 애니메이션 시작
-        animate();
-      }
-
-      // 1초마다 시간 업데이트
-      setInterval(() => {
-        const code = window.currentFeature
-          ? window.currentFeature.properties.ISO_A2.toLowerCase()
-          : 'kr';
-        updateTimes(code);
-      }, 1000);
-
-      // 초기화 호출
-      init().catch(err => console.error(err));
-    });
+    // === Timezone mapping and clock ===
+    const timeZoneMap = {kr:'Asia/Seoul',de:'Europe/Berlin',fr:'Europe/Paris',us:'America/New_York',cn:'Asia/Shanghai',jp:'Asia/Tokyo',mx:'America/Mexico_City',ar:'America/Argentina/Buenos_Aires',br:'America/Sao_Paulo',cl:'America/Santiago',co:'America/Bogota',pe:'America/Lima',ve:'America/Caracas',ec:'America/Guayaquil',bo:'America/La_Paz',cu:'America/Havana',do:'America/Santo_Domingo',uy:'America/Montevideo',py:'America/Asuncion',pa:'America/Panama',cr:'America/Costa_Rica',gt:'America/Guatemala',hn:'America/Tegucigalpa',sv:'America/El_Salvador',ni:'America/Managua',bz:'America/Belize',gy:'America/Guyana',sr:'America/Paramaribo',ht:'America/Port-au-Prince',jm:'America/Jamaica',tt:'America/Port_of_Spain',pr:'America/Puerto_Rico'};
+    function updateTimes(){
+      const left = document.getElementById('time-left');
+      left.textContent = `Republic of Korea Local Time: ${new Date().toLocaleTimeString('en-US',{timeZone:'Asia/Seoul',hour12:false})}`;
+      const right = document.getElementById('time-right');
+      const f=window.currentFeature; const name=f?f.properties.ADMIN:'Republic of Korea'; const iso=f?f.properties.ISO_A2.toLowerCase():'kr'; const tz=timeZoneMap[iso]||'UTC';
+      right.textContent = `${name} Local Time: ${new Date().toLocaleTimeString('en-US',{timeZone:tz,hour12:false})}`;
+    }
+    window.onload = ()=>{ init(); updateTimes(); setInterval(updateTimes,1000); };
   </script>
-
 </body>
 </html>
