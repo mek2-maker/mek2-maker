@@ -1,3 +1,4 @@
+<!-- 생략된 부분 없이 완전한 코드입니다. 여기서부터 복사하세요 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -87,27 +88,16 @@
       const img = document.createElement('img');
       img.alt = alt;
       const upper = code.toUpperCase();
-      const exts  = ['gif', 'png', 'jpg'];
-      let idx = 0;
+      const exts = ['gif', 'png', 'jpg'];
+      let attempt = 0;
 
-      // 첫 시도: .gif
-      img.src = `./flag/${upper}.${exts[idx++]}`;
+      function tryNext() {
+        if (attempt >= exts.length) return;
+        img.src = `./flag/${upper}.${exts[attempt++]}`;
+        img.onerror = tryNext;
+      }
 
-      img.onerror = () => {
-        if (idx < exts.length) {
-          // 다음 확장자로 경로 변경
-          img.onerror = null;                // 중복 호출 방지
-          img.src     = `./flag/${upper}.${exts[idx++]}`;
-          // 다음 실패에도 다시 onerror 걸어주기
-          img.onerror = () => {
-            if (idx < exts.length) {
-              img.onerror = null;
-              img.src     = `./flag/${upper}.${exts[idx++]}`;
-            }
-          };
-        }
-      };
-
+      tryNext();
       return img;
     }
 
@@ -120,6 +110,13 @@
       msgDiv.textContent = msg;
       msgDiv.style.color = (type==='error' ? 'red' : 'green');
       setTimeout(() => msgDiv.textContent = '', 3000);
+    }
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+      TWEEN.update(time);
+      controls.update();
+      renderer.render(scene, camera);
     }
 
     function lonLatToXYZ(lon, lat, r = R) {
