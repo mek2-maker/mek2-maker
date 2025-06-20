@@ -89,19 +89,25 @@
       const upper = code.toUpperCase();
       const exts  = ['gif', 'png', 'jpg'];
       let idx = 0;
+
+      // 첫 시도: .gif
       img.src = `./flag/${upper}.${exts[idx++]}`;
+
       img.onerror = () => {
         if (idx < exts.length) {
-          img.onerror = null;
-          img.src = `./flag/${upper}.${exts[idx++]}`;
+          // 다음 확장자로 경로 변경
+          img.onerror = null;                // 중복 호출 방지
+          img.src     = `./flag/${upper}.${exts[idx++]}`;
+          // 다음 실패에도 다시 onerror 걸어주기
           img.onerror = () => {
             if (idx < exts.length) {
               img.onerror = null;
-              img.src = `./flag/${upper}.${exts[idx++]}`;
+              img.src     = `./flag/${upper}.${exts[idx++]}`;
             }
           };
         }
       };
+
       return img;
     }
 
