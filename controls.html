@@ -1,40 +1,52 @@
-<!-- controls.html -->
-<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>Controls</title>
-<style>body{margin:0;font-family:sans-serif;padding:10px;}#time{font-weight:bold;}</style>
-</head><body>
-  <input type="range" id="slider" min="0" max="9" value="0">
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Controls</title>
+  <style>
+    body{margin:0;font-family:sans-serif;padding:10px;}
+    #time{font-weight:bold;margin-left:8px;}
+  </style>
+</head>
+<body>
+  <input type="range" id="slider" min="0" max="4" value="0">
   <button id="play">Play</button>
-  <span>Frame: <span id="time">0</span></span>
+  현재: <span id="time">0</span>
 
   <script>
-    const s = document.getElementById('slider'),
-          p = document.getElementById('play'),
-          t = document.getElementById('time');
+    const slider = document.getElementById('slider'),
+          btn    = document.getElementById('play'),
+          lbl    = document.getElementById('time');
     let timer = null;
 
-    function broadcast(i) {
-      window.parent.postMessage({ timeIndex:i }, '*');
-      t.textContent = i;
+    const channel = new BroadcastChannel('timesync');
+
+    function updateUI(i) {
+      slider.value = i;
+      lbl.textContent = i;
     }
-    s.oninput = ()=> broadcast(+s.value);
-    p.onclick = ()=>{
-      if(timer) { clearInterval(timer); timer = null; p.textContent='Play'; }
-      else {
-        p.textContent='Pause';
+    function broadcast(i) {
+      channel.postMessage(i);
+      updateUI(i);
+    }
+
+    slider.oninput = ()=> broadcast(+slider.value);
+    btn.onclick = ()=>{
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        btn.textContent = 'Play';
+      } else {
+        btn.textContent = 'Pause';
         timer = setInterval(()=>{
-          let n = (+s.value+1)%10;
-          s.value = n;
+          let n = (+slider.value + 1) % ( +slider.max + 1 );
           broadcast(n);
-        },1000);
+        }, 1000);
       }
     };
 
-    // 부모(FlipHTML5 페이지)에도 동기화 명령이 올 수 있으니 UI 업데이트
-    window.addEventListener('message', e=>{
-      if(e.data.timeIndex!==undefined){
-        s.value = e.data.timeIndex;
-        t.textContent = e.data.timeIndex;
-      }
-    });
+    // (선택) 다른 컨텍스트에서 보낸 신호로 UI 동기화
+    channel.onmessage = ev => updateUI(ev.data);
   </script>
-</body></html>
+</body>
+</html>
