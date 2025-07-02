@@ -1,60 +1,43 @@
-<!-- a.html -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <title>A 그래프</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { margin: 0; font-family: sans-serif; }
-    #canvasA { display: block; width: 100%; height: 100%; }
-  </style>
+  <style>body{margin:0;font-family:sans-serif;}canvas{width:100%;height:100%}</style>
 </head>
 <body>
   <canvas id="canvasA" width="400" height="300"></canvas>
-
   <script>
-    // 예시 데이터: 5개 프레임 × 3개 점
+    // 데이터 정의
     const dataA = [
-      [10, 20, 30],
-      [15, 25, 35],
-      [20, 30, 40],
-      [25, 35, 45],
-      [30, 40, 50]
+      [10,20,30],
+      [15,25,35],
+      [20,30,40],
+      [25,35,45],
+      [30,40,50]
     ];
 
+    // 차트 초기화
     const ctx = document.getElementById('canvasA').getContext('2d');
-    const chartA = new Chart(ctx, {
+    const chart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: ['X1', 'X2', 'X3'],
-        datasets: [{
-          label: 'Series A',
-          data: dataA[0],
-          borderWidth: 2,
-          fill: false
-        }]
+        labels: ['X1','X2','X3'],
+        datasets: [{ label:'Series A', data:dataA[0], borderWidth:2, fill:false }]
       },
-      options: {
-        animation: false,
-        scales: { y: { beginAtZero: true } },
-        responsive: false
-      }
+      options:{ animation:false, responsive:false, scales:{ y:{ beginAtZero:true } } }
     });
 
-    // timeIndex 에 맞춰 데이터 갱신
-    function updateTime(index) {
-      if (index < 0 || index >= dataA.length) return;
-      chartA.data.datasets[0].data = dataA[index];
-      chartA.update();
-    }
-
-    // 부모(controls)에서 보낸 메시지 수신
-    window.addEventListener('message', e => {
-      if (e.data && typeof e.data.timeIndex === 'number') {
-        updateTime(e.data.timeIndex);
+    // BroadcastChannel 열기 (이름은 임의로 정해도 상관없음)
+    const channel = new BroadcastChannel('timesync');
+    channel.onmessage = ev => {
+      const idx = ev.data;
+      if (idx >= 0 && idx < dataA.length) {
+        chart.data.datasets[0].data = dataA[idx];
+        chart.update();
       }
-    });
+    };
   </script>
 </body>
 </html>
