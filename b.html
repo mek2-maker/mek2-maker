@@ -1,73 +1,54 @@
-<!-- b.html -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <title>B 인포그래픽</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
-  <style>
-    body { margin: 0; font-family: sans-serif; }
-    svg { display: block; width: 100%; height: 100%; }
-  </style>
+  <style>body{margin:0;font-family:sans-serif;}svg{width:100%;height:100%}</style>
 </head>
 <body>
   <svg id="svgB" width="400" height="300"></svg>
-
   <script>
-    // 예시 데이터: 5개 프레임 × 3개 바
     const dataB = [
-      [100, 150, 120],
-      [110, 140, 130],
-      [120, 130, 140],
-      [130, 120, 150],
-      [140, 110, 160]
+      [100,150,120],
+      [110,140,130],
+      [120,130,140],
+      [130,120,150],
+      [140,110,160]
     ];
 
     const svg = d3.select('#svgB');
-    const width  = +svg.attr('width');
-    const height = +svg.attr('height');
-    const barCount = dataB[0].length;
-    const barWidth = (width - 40) / barCount;
+    const W = +svg.attr('width'), H = +svg.attr('height');
+    const n = dataB[0].length, barW = (W-40)/n;
 
-    // 주어진 프레임 i 로 그래프 렌더링
+    // 렌더 함수
     function render(i) {
-      if (i < 0 || i >= dataB.length) return;
+      if (i<0||i>=dataB.length) return;
       const pops = dataB[i];
-
-      // BAR
+      // bar
       const bars = svg.selectAll('rect').data(pops);
       bars.enter().append('rect')
-          .attr('x', (d, idx) => 20 + idx * barWidth)
-          .attr('width', barWidth - 5)
-          .attr('y', height - 20)     // 초기 높이 0에서 애니메이션
-          .attr('height', 0)
+          .attr('x',(d,j)=>20+j*barW)
+          .attr('width',barW-5)
+          .attr('y',H-20).attr('height',0)
         .merge(bars)
           .transition().duration(300)
-          .attr('y', d => height - d - 20)
-          .attr('height', d => d);
+          .attr('y',d=>H-d-20).attr('height',d=>d);
       bars.exit().remove();
-
-      // LABEL
-      const labels = svg.selectAll('text').data(pops);
-      labels.enter().append('text')
-          .attr('x', (d, idx) => 20 + idx * barWidth + (barWidth-5)/2)
-          .attr('y', height - 5)
-          .attr('text-anchor', 'middle')
-          .text((d, idx) => `지역 ${idx+1}`)
-        .merge(labels)
-          .text((d, idx) => `지역 ${idx+1}`);
-      labels.exit().remove();
+      // label
+      const labs = svg.selectAll('text').data(pops);
+      labs.enter().append('text')
+          .attr('x',(d,j)=>20+j*barW+(barW-5)/2)
+          .attr('y',H-5).attr('text-anchor','middle')
+          .text((d,j)=>`지역 ${j+1}`)
+        .merge(labs).text((d,j)=>`지역 ${j+1}`);
+      labs.exit().remove();
     }
 
-    // 초기 렌더링
     render(0);
 
-    // 부모(controls)에서 보낸 메시지 수신
-    window.addEventListener('message', e => {
-      if (e.data && typeof e.data.timeIndex === 'number') {
-        render(e.data.timeIndex);
-      }
-    });
+    const channel = new BroadcastChannel('timesync');
+    channel.onmessage = ev => render(ev.data);
   </script>
 </body>
 </html>
