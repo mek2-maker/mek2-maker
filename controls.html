@@ -1,0 +1,40 @@
+<!-- controls.html -->
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>Controls</title>
+<style>body{margin:0;font-family:sans-serif;padding:10px;}#time{font-weight:bold;}</style>
+</head><body>
+  <input type="range" id="slider" min="0" max="9" value="0">
+  <button id="play">Play</button>
+  <span>Frame: <span id="time">0</span></span>
+
+  <script>
+    const s = document.getElementById('slider'),
+          p = document.getElementById('play'),
+          t = document.getElementById('time');
+    let timer = null;
+
+    function broadcast(i) {
+      window.parent.postMessage({ timeIndex:i }, '*');
+      t.textContent = i;
+    }
+    s.oninput = ()=> broadcast(+s.value);
+    p.onclick = ()=>{
+      if(timer) { clearInterval(timer); timer = null; p.textContent='Play'; }
+      else {
+        p.textContent='Pause';
+        timer = setInterval(()=>{
+          let n = (+s.value+1)%10;
+          s.value = n;
+          broadcast(n);
+        },1000);
+      }
+    };
+
+    // 부모(FlipHTML5 페이지)에도 동기화 명령이 올 수 있으니 UI 업데이트
+    window.addEventListener('message', e=>{
+      if(e.data.timeIndex!==undefined){
+        s.value = e.data.timeIndex;
+        t.textContent = e.data.timeIndex;
+      }
+    });
+  </script>
+</body></html>

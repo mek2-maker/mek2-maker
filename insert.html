@@ -1,0 +1,13 @@
+<script>
+  // FlipHTML5에서 임베드된 iframe들을 id로 가져옴
+  const frameA = document.getElementById('embA').querySelector('iframe').contentWindow;
+  const frameB = document.getElementById('embB').querySelector('iframe').contentWindow;
+
+  // controls.html 이 보내는 메시지를 가로채서 A/B에 전달
+  window.addEventListener('message', e => {
+    if (e.data && e.data.timeIndex !== undefined) {
+      frameA.postMessage(e.data, '*');
+      frameB.postMessage(e.data, '*');
+    }
+  });
+</script>
