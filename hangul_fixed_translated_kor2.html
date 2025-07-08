@@ -7,7 +7,7 @@
     /* ── 기본 레이아웃 ── */
     html, body {
       margin: 0;
-      padding: 20px;
+      padding: 0;
       height: 100vh;
       box-sizing: border-box;
       font-family: sans-serif;
@@ -33,16 +33,18 @@
 
     /* ── 차트 컨테이너 ── */
     .chart-container {
-      width: 100%;
+      margin: 0 -20px;
+      padding: 0;
+      width:  calc(100% + 40px);
       /* 제목(≈36px) + 컨트롤(≈60px) + 여백(≈20px) 빼고 꽉 채움 */
       height: calc(100vh - 116px);
       overflow: hidden;
     }
     .chart {
       display: flex;
-      gap: 40px;
+      gap: 10px;
       justify-content: center;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       transform-origin: top center;
       /* transform 은 JS 로 동적 적용 */
     }
