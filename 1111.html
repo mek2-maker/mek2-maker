@@ -1,0 +1,31 @@
+<div class="blink-marker" style="--x: 320px; --y: 180px; --size: 24px; --color: #ff4d4d;"></div>
+
+<style>
+.blink-marker{
+  position: fixed; inset: 0; pointer-events: none; /* 전체 캔버스(투명) */
+}
+.blink-marker::before, .blink-marker::after{
+  content:""; position:absolute; left:var(--x); top:var(--y);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events:none;
+}
+/* 고정된 링 */
+.blink-marker::before{
+  width: var(--size); height: var(--size);
+  box-shadow: 0 0 0 2px var(--color) inset;
+  background: transparent;
+}
+/* 퍼지면서 깜빡이는 링 */
+.blink-marker::after{
+  width: calc(var(--size) * 1.4); height: calc(var(--size) * 1.4);
+  box-shadow: 0 0 0 2px var(--color) inset;
+  animation: pulse 1.2s ease-out infinite;
+  opacity: .9;
+}
+@keyframes pulse{
+  0%{ transform: translate(-50%, -50%) scale(0.7); opacity: .9; }
+  70%{ transform: translate(-50%, -50%) scale(1.3); opacity: 0; }
+  100%{ transform: translate(-50%, -50%) scale(1.3); opacity: 0; }
+}
+</style>
