@@ -1,0 +1,48 @@
+<div class="click-here-box">Locate Korea’s Four Extreme Points</div>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+.click-here-box {
+  position: fixed;
+  top: 0;        /* 상단 고정 */
+  left: 0;       /* 좌측 고정 */
+  background: #fff;
+  color: #222;
+  border: 2px solid #ff4d4d;
+  border-radius: 10px;
+  padding: .5rem .8rem;
+  font: 600 14px/1.4 system-ui, sans-serif;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.15));
+  writing-mode: vertical-rl;    /* 세로쓰기 */
+  text-orientation: upright;    /* 글자 방향 바르게 */ 
+  letter-spacing: 3px;   /* 글자 사이 간격 */
+  animation: blink 4s ease-in-out infinite; /* 깜빡임 애니메이션 */
+}
+
+/* 화살표 꼬리 (→ 오른쪽 방향) */
+.click-here-box::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  border-left: 12px solid #ff4d4d;
+}
+
+/* 깜빡임 효과 */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+</style>
