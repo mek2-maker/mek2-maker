@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Clock</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      font-size: calc(8px + 0.6vw);
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #ffffff !important;
+    }
+
+    /* ✅ 위아래로 배치 */
+    .clock-container {
+      display: flex;
+      flex-direction: column;     /* 세로 방향 */
+      align-items: center;        /* 중앙 정렬 */
+      width: 90%;                 /* 화면에 따라 유동 */
+      max-width: 800px;           /* 지도 폭에 맞춰 최대 800px */
+      margin: 0 auto 30px auto;   /* 지도와 간격 */
+      gap: 15px;                  /* 박스 사이 간격 */
+    }
+
+    .clock-box {
+      width: 100%;                /* 부모 폭에 맞게 */
+      box-sizing: border-box;
+      border: 2px solid #007bff;
+      border-radius: 10px;
+      padding: clamp(10px, 1vw, 5px); /* 화면 크기에 맞춰 padding 유동 */
+      background-color: #ffffff !important;
+      box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.2);
+      font-size: clamp(1em, 2vw, 1.6em); /* 화면 크기에 따라 글씨 유동 */
+    }
+
+    .clock-box p {
+      margin: 0.1em 0;
+      line-height: 1.3;
+    }
+
+    .map-container {
+      position: relative;
+      display: inline-block;
+      max-width: 90%;
+      width: 800px; /* 지도 폭 고정 */
+    }
+
+    img {
+      width: 100%;
+      height: auto;
+    }
+
+    .map-marker {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background-color: red;
+      border-radius: 50%;
+      cursor: pointer;
+      transform: translate(-50%, -50%);
+      animation: blink 1.5s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Korea & World Time -->
+  <div class="clock-container">
+    <div class="clock-box">
+      <p><strong>🇰🇷 Korea</strong> Current Time</p>
+      <p id="korea-time">Loading...</p>
+    </div>
+    <div class="clock-box">
+      <p><strong id="selected-country">🌎 World</strong> Current Time</p>
+      <p id="selected-time">Loading...</p>
+    </div>
+  </div>
+
+  <!-- World Map -->
+  <div class="map-container">
+    <img id="world-map" src="Standard Time2.png" alt="World Time Zone Map">
+  </div>
+
+  <script>
+    let selectedTimeZone = null;
+
+    const cities = [
+      { name: "Oslo", timezone: "Europe/Oslo", x: 11.3, y: 31.8 },
+      { name: "London", timezone: "Europe/London", x: 8.38, y: 36.20 },
+      { name: "Paris", timezone: "Europe/Paris", x: 9.2, y: 37.60 },
+      { name: "Moscow", timezone: "Europe/Moscow", x: 19.2, y: 33.37 },
+      { name: "Cairo", timezone: "Africa/Cairo", x: 17, y: 46.1 },
+      { name: "Cape Town", timezone: "Africa/Johannesburg", x: 13.9, y: 71.1 },
+      { name: "Dhaka", timezone: "Asia/Dhaka", x: 33.37, y: 48.70 },
+      { name: "Beijing", timezone: "Asia/Shanghai", x: 40.12, y: 42.3 },
+      { name: "Seoul", timezone: "Asia/Seoul", x: 43.65, y: 43.15 },
+      { name: "Tokyo", timezone: "Asia/Tokyo", x: 46.65, y: 44.17 },
+      { name: "Sydney", timezone: "Australia/Sydney", x: 49.88, y: 71 },
+      { name: "Auckland", timezone: "Pacific/Auckland", x: 56.87, y: 72.78 },
+      { name: "Anchorage", timezone: "America/Anchorage", x: 66.2, y: 30.8 },
+      { name: "Vancouver", timezone: "America/Vancouver", x: 74.05, y: 37.1 },
+      { name: "New York", timezone: "America/New_York", x: 87.9, y: 41.03 },
+      { name: "Washington D.C.", timezone: "America/New_York", x: 87.2, y: 41.8 },
+      { name: "Seattle", timezone: "America/Los_Angeles", x: 74.38, y: 38.1 },
+      { name: "Los Angeles", timezone: "America/Los_Angeles", x: 75.55, y: 44.37 },
+      { name: "Lima", timezone: "America/Lima", x: 86.8, y: 61.80 },
+      { name: "Santiago", timezone: "America/Santiago", x: 88.30, y: 71.1 },
+      { name: "Rio de Janeiro", timezone: "America/Sao_Paulo", x: 95.67, y: 66.44 },
+      { name: "Buenos Aires", timezone: "America/Argentina/Buenos_Aires", x: 91.44, y: 71.47 }
+    ];
+
+    function createMarkers() {
+      const mapContainer = document.querySelector(".map-container");
+      cities.forEach(city => {
+        const marker = document.createElement("div");
+        marker.classList.add("map-marker");
+        marker.style.left = `${city.x}%`;
+        marker.style.top = `${city.y}%`;
+        marker.title = city.name;
+        marker.onclick = () => updateTimeByImage(city.timezone, city.name);
+        mapContainer.appendChild(marker);
+      });
+    }
+
+    function getTimeInTimeZone(timeZone) {
+      const now = new Date();
+      return now.toLocaleString("en-US", {
+        timeZone: timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+      });
+    }
+
+    function updateTimes() {
+      document.getElementById("korea-time").textContent = getTimeInTimeZone("Asia/Seoul");
+      if (selectedTimeZone) {
+        document.getElementById("selected-time").textContent = getTimeInTimeZone(selectedTimeZone);
+      }
+    }
+
+    function updateTimeByImage(timeZone, countryName) {
+      selectedTimeZone = timeZone;
+      document.getElementById("selected-time").textContent = getTimeInTimeZone(timeZone);
+      document.getElementById("selected-country").textContent = countryName;
+    }
+
+    setInterval(updateTimes, 1000);
+    updateTimes();
+    window.onload = createMarkers;
+  </script>
+</body>
+</html>
