@@ -1,0 +1,47 @@
+<div class="click-here-box">Click each colored box</div>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+.click-here-box {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: #fff;
+  color: #222;
+  border: 2px solid #ff4d4d;
+  border-radius: 10px;
+  padding: .5rem .8rem;
+  font: 600 14px/1.4 system-ui, sans-serif;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.15));
+
+  /* 깜빡임 애니메이션 */
+  animation: blink 4s ease-in-out infinite;
+}
+
+/* 화살표 꼬리 */
+.click-here-box::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 12px solid #ff4d4d;
+}
+
+/* 깜빡임 효과 */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+</style>
