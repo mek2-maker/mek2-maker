@@ -14,29 +14,31 @@
     }
     h1 {
       text-align: center;
-      font-size: clamp(0.8rem, 4vw, 2rem);
-      margin: 0 0 3px;
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
+      margin: 0 0 5px;
     }
     .controls {
       text-align: center;
-      font-size: clamp(0.8rem, 4vw, 2rem);
-      margin-top: 0;
+      margin-top: 10px;
     }
     .result {
-      font-size: clamp(0.8rem, 4vw, 2rem);
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
       margin-bottom: 3px;
     }
     #reset-btn {
-      font-size: 0.5rem;
-      padding: 0;
+      font-size: 1rem;
+      padding: 5px 10px;
       cursor: pointer;
     }
 
     /* ── 차트 컨테이너 ── */
     .chart-container {
-      margin: 0;
+      margin: 0 -20px;
       padding: 0;
-      max-height: 70vh;
+      width:  calc(100% + 40px);
+      /* 제목(≈36px) + 컨트롤(≈60px) + 여백(≈20px) 빼고 꽉 채움 */
+      height: calc(100vh - 116px);
+      overflow: hidden;
     }
     .chart {
       display: flex;
@@ -97,7 +99,7 @@
   </style>
 </head>
 <body>
-  <h1 id="page-title">Select an initial consonant</h1>
+  <h1>HANGUL Jamo Chart</h1>
 
   <!-- 자동 축소 영역 -->
   <div class="chart-container">
@@ -118,7 +120,7 @@
   </div>
 
   <div class="controls">
-    <div class="result" id="syllable-output"></div>
+    <div class="result" id="syllable-output">Select an initial consonant</div>
     <button id="reset-btn">Reset</button>
   </div>
 
@@ -1750,138 +1752,170 @@
 ]
   </script>
 
-  <script>
-    // 음성 합성용
-    let ALL_VOICES = [];
-    speechSynthesis.onvoiceschanged = () => { ALL_VOICES = speechSynthesis.getVoices(); };
-    speechSynthesis.getVoices();
-    async function speakKorean(txt) {
-      if (!ALL_VOICES.length) await new Promise(r => setTimeout(r,100));
-      const voices = ALL_VOICES.length ? ALL_VOICES : speechSynthesis.getVoices();
-      let kor = voices.find(v=>v.lang==='ko-KR') 
-             || voices.find(v=>v.lang.startsWith('ko'))
-             || voices[0];
-      const u = new SpeechSynthesisUtterance(txt);
-      u.voice = kor; u.lang = kor.lang; u.rate = 0.9;
-      speechSynthesis.cancel();
-      speechSynthesis.speak(u);
-    }
+<script>
+  // 음성 합성용
+  let ALL_VOICES = [];
+  speechSynthesis.onvoiceschanged = () => { ALL_VOICES = speechSynthesis.getVoices(); };
+  speechSynthesis.getVoices();
+  async function speakKorean(txt) {
+    if (!ALL_VOICES.length) await new Promise(r => setTimeout(r,100));
+    const voices = ALL_VOICES.length ? ALL_VOICES : speechSynthesis.getVoices();
+    let kor = voices.find(v=>v.lang==='ko-KR') 
+           || voices.find(v=>v.lang.startsWith('ko'))
+           || voices[0];
+    const u = new SpeechSynthesisUtterance(txt);
+    u.voice = kor; u.lang = kor.lang; u.rate = 0.9;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
 
-    // 유효 음절 Set
-    const VALID = new Set(JSON.parse(document.getElementById('valid-data').textContent));
+  // 유효 음절 Set
+  const VALID = new Set(JSON.parse(document.getElementById('valid-data').textContent));
 
-    // 자모 정의
-    const CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
-    const JUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
-    const FULL_JONG = ['', 'ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+  // 자모 정의
+  const CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+  const JUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
+  const FULL_JONG = ['', 'ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
 
-    // 그리드 엘리먼트
-    const choGrid  = document.getElementById('chosung-grid');
-    const jungGrid = document.getElementById('jungsung-grid');
-    const jongGrid = document.getElementById('jongsung-grid');
-    const out      = document.getElementById('syllable-output');
-    const resetBtn = document.getElementById('reset-btn');
+  // 그리드 엘리먼트
+  const choGrid  = document.getElementById('chosung-grid');
+  const jungGrid = document.getElementById('jungsung-grid');
+  const jongGrid = document.getElementById('jongsung-grid');
+  const out      = document.getElementById('syllable-output');
+  const resetBtn = document.getElementById('reset-btn');
 
-    let choSel = null, jungSel = null;
+  let choSel = null, jungSel = null;
+  let word = '';  // 누적 단어
 
-    // 초기화 함수
-    function resetAll() {
-      choSel = jungSel = null;
-      out.textContent = '';
-      [choGrid,jungGrid,jongGrid].forEach(g =>
-        g.querySelectorAll('button').forEach(b => b.classList.remove('selected','disabled'))
-      );
-      jungGrid.querySelectorAll('button').forEach(b=>b.classList.add('disabled'));
-      jongGrid.querySelectorAll('button').forEach(b=>b.classList.add('disabled'));
-    }
+  // 출력 갱신
+  function updateOutputGuide() {
+    out.textContent = word ? word : 'Select an initial consonant';
+  }
 
-    // 차트 생성
-    function initChart() {
-      // 초성
-      const CHO_ROMA = ['g','kk','n','d','tt','r','m','b','pp','s','ss','ng','j','jj','ch','k','t','p','h'];
-      CHO.forEach((c,i) => {
-        const btn = document.createElement('button');
-        btn.innerHTML = `<span>${c}</span><span class="roma">${CHO_ROMA[i]}</span>`;
-        btn.addEventListener('click', () => {
-          choSel = i; jungSel = null;
-          choGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
-          btn.classList.add('selected');
-          jungGrid.querySelectorAll('button').forEach(x=>x.classList.remove('disabled'));
-          jongGrid.querySelectorAll('button').forEach(x=>x.classList.add('disabled'));
-                document.getElementById('page-title').textContent = 'Select a medial vowel';
-        });
-        choGrid.appendChild(btn);
-      });
+  // 초기화 함수
+  function resetAll() {
+    choSel = jungSel = null;
+    word = '';
+    [choGrid,jungGrid,jongGrid].forEach(g =>
+      g.querySelectorAll('button').forEach(b => b.classList.remove('selected','disabled'))
+    );
+    // 초성만 활성, 나머지는 비활성
+    jungGrid.querySelectorAll('button').forEach(b=>b.classList.add('disabled'));
+    jongGrid.querySelectorAll('button').forEach(b=>b.classList.add('disabled'));
+    updateOutputGuide();
+  }
 
-      // 중성
-      const JUNG_ROMA = ['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','u','wo','we','wi','yu','eu','ui','i'];
-      JUNG.forEach((c,j) => {
-        const btn = document.createElement('button');
-        btn.innerHTML = `<span>${c}</span><span class="roma">${JUNG_ROMA[j]}</span>`;
-        btn.classList.add('disabled');
-        btn.addEventListener('click', () => {
-          if (choSel===null) return;
-          jungSel = j;
-          jungGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
-          btn.classList.add('selected');
-          jongGrid.querySelectorAll('button').forEach(x=>{
-            const idx = +x.dataset.idx;
-            const syll = String.fromCharCode(0xAC00 + (choSel*21 + jungSel)*28 + idx);
-            x.classList.toggle('disabled', idx!==0 && !VALID.has(syll));
-            x.classList.remove('selected');
-          document.getElementById('page-title').textContent = 'Select a final consonant';
-          });
-        });
-        jungGrid.appendChild(btn);
-      });
+  // 한 글자(음절) 완성 후 처리: word에 추가하고 다음 글자 시작 상태로
+  function commitSyllable(idxFinal) {
+    const code = 0xAC00 + (choSel*21 + jungSel)*28 + idxFinal;
+    const syll = String.fromCharCode(code);
 
-      // 종성
-      FULL_JONG.forEach((c,k) => {
-        const btn = document.createElement('button');
-        btn.textContent = c || '(none)';
-        if (!c) btn.classList.add('none-label');
-        btn.dataset.idx = k;
-        btn.classList.add('disabled');
-        btn.addEventListener('click', () => {
-          if (choSel===null||jungSel===null) return;
-          jongGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
-          btn.classList.add('selected');
-          const idx = +btn.dataset.idx;
-          const syll = String.fromCharCode(0xAC00 + (choSel*21 + jungSel)*28 + idx);
-                document.getElementById('page-title').textContent = 'Select an initial consonant';
-                document.getElementById('syllable-output').textContent = syll;
-          speakKorean(syll);
-          // 선택 후 하이라이트 리셋
-          choGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
-          jungGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
-          jongGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
-        });
-        jongGrid.appendChild(btn);
-      });
+    // 유효성: 종성이 있고 VALID에 없으면 무시
+    if (idxFinal !== 0 && !VALID.has(syll)) return;
 
-      resetBtn.addEventListener('click', resetAll);
-      resetAll();
-    }
+    word += syll;
+    out.textContent = word;
+    speakKorean(syll);
 
-    // 컨테이너 크기에 맞춰 자동 축소
-    function resizeChart() {
-      const container = document.querySelector('.chart-container');
-      const chart     = document.getElementById('chart');
-      const cw = container.clientWidth;
-      const ch = container.clientHeight;
-      const bw = chart.scrollWidth;
-      const bh = chart.scrollHeight;
-      // 필요한 경우만 축소
-      const scale = Math.min(cw/bw, ch/bh, 1);
-      chart.style.transform = `scale(${scale})`;
-    }
+    // 다음 글자를 만들 수 있도록 선택/버튼 상태만 초기화 (진짜 리셋 아님)
+    choSel = jungSel = null;
 
-    // 초기화 & 이벤트 바인딩
-    window.addEventListener('load', () => {
-      initChart();
-      resizeChart();
+    choGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
+    jungGrid.querySelectorAll('button').forEach(x=>{
+      x.classList.remove('selected');
+      x.classList.add('disabled');      // 다시 초성부터 선택하도록
     });
-    window.addEventListener('resize', resizeChart);
-  </script>
+    jongGrid.querySelectorAll('button').forEach(x=>{
+      x.classList.remove('selected');
+      x.classList.add('disabled');
+    });
+  }
+
+  // 차트 생성
+  function initChart() {
+    // 초성
+    const CHO_ROMA = ['g','kk','n','d','tt','r','m','b','pp','s','ss','ng','j','jj','ch','k','t','p','h'];
+    CHO.forEach((c,i) => {
+      const btn = document.createElement('button');
+      btn.innerHTML = `<span>${c}</span><span class="roma">${CHO_ROMA[i]}</span>`;
+      btn.addEventListener('click', () => {
+        choSel = i; jungSel = null;
+        choGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
+        btn.classList.add('selected');
+        // 중성 활성
+        jungGrid.querySelectorAll('button').forEach(x=>x.classList.remove('disabled'));
+        // 종성은 아직 비활성
+        jongGrid.querySelectorAll('button').forEach(x=>x.classList.add('disabled'));
+        // 안내는 유지: 누적 단어 또는 안내문
+        updateOutputGuide();
+      });
+      choGrid.appendChild(btn);
+    });
+
+    // 중성
+    const JUNG_ROMA = ['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','u','wo','we','wi','yu','eu','ui','i'];
+    JUNG.forEach((c,j) => {
+      const btn = document.createElement('button');
+      btn.innerHTML = `<span>${c}</span><span class="roma">${JUNG_ROMA[j]}</span>`;
+      btn.classList.add('disabled');
+      btn.addEventListener('click', () => {
+        if (choSel===null) return;
+        jungSel = j;
+        jungGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
+        btn.classList.add('selected');
+
+        // 중성까지 고르면 종성 후보 활성/필터링
+        jongGrid.querySelectorAll('button').forEach(x=>{
+          const idx = +x.dataset.idx;
+          const test = String.fromCharCode(0xAC00 + (choSel*21 + jungSel)*28 + idx);
+          x.classList.toggle('disabled', idx!==0 && !VALID.has(test));
+          x.classList.remove('selected');
+        });
+      });
+      jungGrid.appendChild(btn);
+    });
+
+    // 종성
+    FULL_JONG.forEach((c,k) => {
+      const btn = document.createElement('button');
+      btn.textContent = c || '(none)';
+      if (!c) btn.classList.add('none-label');
+      btn.dataset.idx = k;
+      btn.classList.add('disabled');
+      btn.addEventListener('click', () => {
+        if (choSel===null||jungSel===null) return;
+        jongGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
+        btn.classList.add('selected');
+
+        // 선택된 종성으로 음절 확정 → 누적 + 다음 글자 준비
+        commitSyllable(+btn.dataset.idx);
+      });
+      jongGrid.appendChild(btn);
+    });
+
+    resetBtn.addEventListener('click', resetAll);
+    resetAll();
+  }
+
+  // 컨테이너 크기에 맞춰 자동 축소
+  function resizeChart() {
+    const container = document.querySelector('.chart-container');
+    const chart     = document.getElementById('chart');
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    const bw = chart.scrollWidth;
+    const bh = chart.scrollHeight;
+    // 필요한 경우만 축소
+    const scale = Math.min(cw/bw, ch/bh, 1);
+    chart.style.transform = `scale(${scale})`;
+  }
+
+  // 초기화 & 이벤트 바인딩
+  window.addEventListener('load', () => {
+    initChart();
+    resizeChart();
+  });
+  window.addEventListener('resize', resizeChart);
+</script>
 </body>
 </html>
