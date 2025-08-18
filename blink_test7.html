@@ -1,48 +1,64 @@
 <div class="click-here-box">Locate Korea’s Four Extreme Points</div>
 
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
+html, body { margin: 0; padding: 0; }
+
+/* 화면 크기에 따라 13px ~ 18px 사이에서 자동 조절 */
+:root{
+  --box-fs: clamp(13px, 0.9rem + 0.5vw, 18px);
+  --box-color: #ff4d4d;
 }
 
 .click-here-box {
   position: fixed;
-  top: 0;        /* 상단 고정 */
-  left: 0;       /* 좌측 고정 */
+  /* 노치/안전영역 고려 */
+  top: max(0px, env(safe-area-inset-top));
+  left: max(0px, env(safe-area-inset-left));
+  
   background: #fff;
   color: #222;
-  border: 2px solid #ff4d4d;
-  border-radius: 10px;
-  padding: .5rem .8rem;
-  font: 600 14px/1.4 system-ui, sans-serif;
+
+  /* 글자 크기 반응형 */
+  font: 600 var(--box-fs)/1.4 system-ui, sans-serif;
+
+  /* 글자/박스가 함께 스케일되도록 em 단위로 변경 */
+  padding: 0.5em 0.8em;
+  border: 0.14em solid var(--box-color);
+  border-radius: 0.7em;
+
   white-space: nowrap;
   pointer-events: auto;
   cursor: pointer;
   filter: drop-shadow(0 2px 6px rgba(0,0,0,.15));
-  writing-mode: vertical-rl;    /* 세로쓰기 */
-  text-orientation: upright;    /* 글자 방향 바르게 */ 
-  letter-spacing: 3px;   /* 글자 사이 간격 */
-  animation: blink 4s ease-in-out infinite; /* 깜빡임 애니메이션 */
+
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 0.2em;
+
+  animation: blink 4s ease-in-out infinite;
 }
 
-/* 화살표 꼬리 (→ 오른쪽 방향) */
+/* 화살표 꼬리도 em 기준으로 함께 스케일 */
 .click-here-box::after {
   content: "";
   position: absolute;
   top: 50%;
   left: 100%;
   transform: translateY(-50%);
-  width: 0;
-  height: 0;
-  border-top: 10px solid transparent;
-  border-bottom: 10px solid transparent;
-  border-left: 12px solid #ff4d4d;
+  width: 0; height: 0;
+  border-top: 0.75em solid transparent;
+  border-bottom: 0.75em solid transparent;
+  border-left: 0.9em solid var(--box-color);
 }
 
 /* 깜빡임 효과 */
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.2; }
+}
+
+/* 작은 화면에서 살짝 여백 */
+@media (max-width: 400px){
+  .click-here-box { margin: 0.25rem; }
 }
 </style>
