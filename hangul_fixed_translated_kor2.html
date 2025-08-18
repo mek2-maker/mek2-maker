@@ -14,31 +14,29 @@
     }
     h1 {
       text-align: center;
-      font-size: clamp(1rem, 2.5vw, 1.2rem);
-      margin: 0 0 5px;
+      font-size: clamp(0.8rem, 4vw, 2rem);
+      margin: 0 0 3px;
     }
     .controls {
       text-align: center;
-      margin-top: 10px;
+      font-size: clamp(0.8rem, 4vw, 2rem);
+      margin-top: 0;
     }
     .result {
-      font-size: clamp(1rem, 2.5vw, 1.2rem);
+      font-size: clamp(0.8rem, 4vw, 2rem);
       margin-bottom: 3px;
     }
     #reset-btn {
-      font-size: 1rem;
-      padding: 5px 10px;
+      font-size: 0.5rem;
+      padding: 0;
       cursor: pointer;
     }
 
     /* ── 차트 컨테이너 ── */
     .chart-container {
-      margin: 0 -20px;
+      margin: 0;
       padding: 0;
-      width:  calc(100% + 40px);
-      /* 제목(≈36px) + 컨트롤(≈60px) + 여백(≈20px) 빼고 꽉 채움 */
-      height: calc(100vh - 116px);
-      overflow: hidden;
+      max-height: 70vh;
     }
     .chart {
       display: flex;
@@ -99,7 +97,7 @@
   </style>
 </head>
 <body>
-  <h1>HANGUL Jamo Chart</h1>
+  <h1 id="page-title">Select an initial consonant</h1>
 
   <!-- 자동 축소 영역 -->
   <div class="chart-container">
@@ -120,7 +118,7 @@
   </div>
 
   <div class="controls">
-    <div class="result" id="syllable-output">Select an initial consonant</div>
+    <div class="result" id="syllable-output"></div>
     <button id="reset-btn">Reset</button>
   </div>
 
@@ -1789,7 +1787,7 @@
     // 초기화 함수
     function resetAll() {
       choSel = jungSel = null;
-      out.textContent = 'Select an initial consonant';
+      out.textContent = '';
       [choGrid,jungGrid,jongGrid].forEach(g =>
         g.querySelectorAll('button').forEach(b => b.classList.remove('selected','disabled'))
       );
@@ -1808,9 +1806,9 @@
           choSel = i; jungSel = null;
           choGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
           btn.classList.add('selected');
-          out.textContent = 'Select a medial vowel';
           jungGrid.querySelectorAll('button').forEach(x=>x.classList.remove('disabled'));
           jongGrid.querySelectorAll('button').forEach(x=>x.classList.add('disabled'));
+                document.getElementById('page-title').textContent = 'Select a medial vowel';
         });
         choGrid.appendChild(btn);
       });
@@ -1826,12 +1824,12 @@
           jungSel = j;
           jungGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
           btn.classList.add('selected');
-          out.textContent = 'Select a final consonant';
           jongGrid.querySelectorAll('button').forEach(x=>{
             const idx = +x.dataset.idx;
             const syll = String.fromCharCode(0xAC00 + (choSel*21 + jungSel)*28 + idx);
             x.classList.toggle('disabled', idx!==0 && !VALID.has(syll));
             x.classList.remove('selected');
+          document.getElementById('page-title').textContent = 'Select a final consonant';
           });
         });
         jungGrid.appendChild(btn);
@@ -1850,7 +1848,8 @@
           btn.classList.add('selected');
           const idx = +btn.dataset.idx;
           const syll = String.fromCharCode(0xAC00 + (choSel*21 + jungSel)*28 + idx);
-          out.textContent = syll;
+                document.getElementById('page-title').textContent = 'Select an initial consonant';
+                document.getElementById('syllable-output').textContent = syll;
           speakKorean(syll);
           // 선택 후 하이라이트 리셋
           choGrid.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
