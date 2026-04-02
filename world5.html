@@ -265,6 +265,25 @@
         p.dot(basis.north) * scale
       ];
     }
+
+    function subdivideTriangle(a, b, c, maxLen, out) {
+      const ab = a.clone().add(b).normalize();
+      const bc = b.clone().add(c).normalize();
+      const ca = c.clone().add(a).normalize();
+    
+      const dab = a.distanceTo(b);
+      const dbc = b.distanceTo(c);
+      const dca = c.distanceTo(a);
+    
+      if (dab > maxLen || dbc > maxLen || dca > maxLen) {
+        subdivideTriangle(a, ab, ca, maxLen, out);
+        subdivideTriangle(ab, b, bc, maxLen, out);
+        subdivideTriangle(ca, bc, c, maxLen, out);
+        subdivideTriangle(ab, bc, ca, maxLen, out);
+      } else {
+        out.push(a.clone(), b.clone(), c.clone());
+      }
+    }
     
     function buildFillMeshForPolygon(poly, color) {
       if (!poly || !poly.length || !poly[0] || poly[0].length < 3) return null;
@@ -290,18 +309,29 @@
       const idxs = earcut(verts2D, holes, 2);
       if (!idxs || !idxs.length) return null;
     
+      const triangles = [];
+      const maxLen = 0.12; // 값 작을수록 더 촘촘 (0.08~0.15 추천)
+      
+      for (let i = 0; i < idxs.length; i += 3) {
+        const ids = [idxs[i], idxs[i + 1], idxs[i + 2]];
+      
+        const verts3D = ids.map(id => {
+          const x = verts2D[2 * id];
+          const y = verts2D[2 * id + 1];
+      
+          return basis.center.clone()
+            .addScaledVector(basis.east, x)
+            .addScaledVector(basis.north, y)
+            .normalize();
+        });
+      
+        subdivideTriangle(verts3D[0], verts3D[1], verts3D[2], maxLen, triangles);
+      }
+      
       const pos = [];
-      idxs.forEach(i => {
-        const x = verts2D[2 * i];
-        const y = verts2D[2 * i + 1];
-    
-        const v = basis.center.clone()
-          .addScaledVector(basis.east, x)
-          .addScaledVector(basis.north, y)
-          .normalize()
-          .multiplyScalar(FILL_R);
-    
-        pos.push(v.x, v.y, v.z);
+      triangles.forEach(v => {
+        const p = v.clone().multiplyScalar(FILL_R);
+        pos.push(p.x, p.y, p.z);
       });
     
       const geom = new THREE.BufferGeometry();
@@ -326,7 +356,6 @@
     
       // 우선 정말 까다로운 몇 나라만 제한
       const blocked = new Set([
-        'cn', 'ru'
       ]);
     
       if (blocked.has(code)) return false;
@@ -336,7 +365,7 @@
         : feature.geometry.coordinates;
     
       // 너무 많은 조각은 아직 보수적으로 제한
-      if (polys.length > 120) return false;
+      if (polys.length > 400) return false;
     
       return true;
     }
