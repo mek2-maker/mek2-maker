@@ -294,79 +294,42 @@
       return out;
     }
 
-    function subdivideTriangleOnSphere(a, b, c, depth, out) {
-      if (depth <= 0) {
-        out.push(a.clone(), b.clone(), c.clone());
-        return;
-      }
-    
-      const ab = a.clone().add(b).normalize();
-      const bc = b.clone().add(c).normalize();
-      const ca = c.clone().add(a).normalize();
-    
-      subdivideTriangleOnSphere(a, ab, ca, depth - 1, out);
-      subdivideTriangleOnSphere(ab, b, bc, depth - 1, out);
-      subdivideTriangleOnSphere(ca, bc, c, depth - 1, out);
-      subdivideTriangleOnSphere(ab, bc, ca, depth - 1, out);
-    }
-    
     function buildFillMeshForPolygon(poly, color) {
       if (!poly || !poly.length || !poly[0] || poly[0].length < 3) return null;
     
       const { centerLon, centerLat } = getPolygonApproxCenter(poly);
+      const basis = getLocalBasis(centerLon, centerLat);
     
-      const cosLat = Math.cos(THREE.MathUtils.degToRad(centerLat)) || 1e-6;
-    
-      // 1) polygon별로만 2D 투영
-      // 2) 날짜변경선 근처 왜곡 줄이려고 longitude unwrap
-      const rings2D = poly.map(ring => {
-        const unwrapped = unwrapRingLongitudes(ring, centerLon);
-        return unwrapped.map(([lon, lat]) => {
-          const x = (lon - centerLon) * cosLat;
-          const y = (lat - centerLat);
-          return [x, y];
-        });
-      });
+      const rings2D = poly.map(ring =>
+        ring.map(([lon, lat]) => projectLonLatToLocal2D(lon, lat, basis, 1.0))
+      );
     
       const verts2D = [];
       const holes = [];
-      const vertexLonLat = [];
     
-      rings2D.forEach((ring2D, i) => {
-        const ringRaw = unwrapRingLongitudes(poly[i], centerLon);
-    
-        if (!ring2D || ring2D.length < 3) return;
+      rings2D.forEach((ring, i) => {
+        if (!ring || ring.length < 3) return;
         if (i > 0) holes.push(verts2D.length / 2);
-    
-        for (let k = 0; k < ring2D.length; k++) {
-          verts2D.push(ring2D[k][0], ring2D[k][1]);
-          vertexLonLat.push(ringRaw[k]);
-        }
+        ring.forEach(([x, y]) => verts2D.push(x, y));
       });
     
       if (verts2D.length < 6) return null;
     
       const idxs = earcut(verts2D, holes, 2);
       if (!idxs || !idxs.length) return null;
-      
-      const triangles = [];
-      const subdiv = 2; // 1~3 사이 (2 추천)
-      
-      for (let i = 0; i < idxs.length; i += 3) {
-        const ids = [idxs[i], idxs[i + 1], idxs[i + 2]];
-      
-        const verts = ids.map(id => {
-          const [lon, lat] = vertexLonLat[id];
-          return lonLatToXYZ(lon, lat, 1).normalize();
-        });
-      
-        subdivideTriangleOnSphere(verts[0], verts[1], verts[2], subdiv, triangles);
-      }
-      
+    
       const pos = [];
-      triangles.forEach(v => {
-        const p = v.clone().multiplyScalar(FILL_R);
-        pos.push(p.x, p.y, p.z);
+      idxs.forEach(id => {
+        const x = verts2D[2 * id];
+        const y = verts2D[2 * id + 1];
+    
+        const v = basis.center.clone()
+          .addScaledVector(basis.east, x)
+          .addScaledVector(basis.north, y)
+          .normalize()
+          .multiplyScalar(FILL_R);
+    
+        pos.push(v.x, v.y, v.z);
       });
     
       const geom = new THREE.BufferGeometry();
@@ -378,7 +341,7 @@
         new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: 0.34,
+          opacity: 0.30,
           side: THREE.DoubleSide,
           depthTest: true,
           depthWrite: false,
@@ -387,13 +350,14 @@
           polygonOffsetUnits: -1
         })
       );
-    }
-    
+    }    
+  
     function shouldUseSafeFill(feature) {
       const code = (feature.properties.ISO_A2 || '').toLowerCase();
     
       // 우선 정말 까다로운 몇 나라만 제한
       const blocked = new Set([
+        'cn', 'ru', 'us', 'ca', 'br', 'au', 'in', 'id'
       ]);
     
       if (blocked.has(code)) return false;
@@ -403,7 +367,7 @@
         : feature.geometry.coordinates;
     
       // 너무 많은 조각은 아직 보수적으로 제한
-      if (polys.length > 400) return false;
+      if (polys.length > 120) return false;
     
       return true;
     }
