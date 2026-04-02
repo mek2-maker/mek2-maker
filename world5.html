@@ -348,10 +348,7 @@
     
       const idxs = earcut(verts2D, holes, 2);
       if (!idxs || !idxs.length) return null;
-    
-      // earcut이 선택한 "원래 꼭짓점"만 그대로 3D로 복원
-      // => boundary와 fill이 같은 원본 점을 공유하므로 더 잘 맞음
-      const pos = [];
+      
       const triangles = [];
       const subdiv = 2; // 1~3 사이 (2 추천)
       
