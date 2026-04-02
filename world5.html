@@ -130,48 +130,99 @@
       return new THREE.Vector3(-r * Math.sin(φ) * Math.cos(θ), r * Math.cos(φ), r * Math.sin(φ) * Math.sin(θ));
     }
 
-    function getCenterOfFeature(f) {
-      const coords = f.geometry.type === 'Polygon'
-        ? f.geometry.coordinates.flat()
-        : f.geometry.coordinates.flat(2);
-      let [minLon, maxLon, minLat, maxLat] = [180, -180, 90, -90];
-      coords.forEach(([lon, lat]) => {
-        minLon = Math.min(minLon, lon);
-        maxLon = Math.max(maxLon, lon);
-        minLat = Math.min(minLat, lat);
-        maxLat = Math.max(maxLat, lat);
-      });
-      return { centerLon: (minLon + maxLon) / 2, centerLat: (minLat + maxLat) / 2 };
+    function getRingArea2D(ring) {
+      let area = 0;
+      for (let i = 0; i < ring.length; i++) {
+        const [x1, y1] = ring[i];
+        const [x2, y2] = ring[(i + 1) % ring.length];
+        area += x1 * y2 - x2 * y1;
+      }
+      return Math.abs(area) * 0.5;
     }
     
-    function getGlobeRotationForFeature(feature) {
+    function vectorToLonLat(v) {
+      const nv = v.clone().normalize();
+      const lat = THREE.MathUtils.radToDeg(Math.asin(nv.y));
+      const lon = THREE.MathUtils.radToDeg(Math.atan2(-nv.z, nv.x));
+      return { centerLon: lon, centerLat: lat };
+    }
+    
+    function getLargestOuterRing(feature) {
+      const polys = feature.geometry.type === 'Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+    
+      let bestRing = null;
+      let bestArea = -Infinity;
+    
+      polys.forEach(poly => {
+        if (!poly || !poly.length) return;
+        const outerRing = poly[0];
+        const area = getRingArea2D(outerRing);
+        if (area > bestArea) {
+          bestArea = area;
+          bestRing = outerRing;
+        }
+      });
+    
+      return bestRing;
+    }
+    
+    function getCenterOfFeature(feature) {
+      const ring = getLargestOuterRing(feature);
+      if (!ring || !ring.length) {
+        return { centerLon: 0, centerLat: 0 };
+      }
+    
+      const acc = new THREE.Vector3(0, 0, 0);
+      ring.forEach(([lon, lat]) => {
+        acc.add(lonLatToXYZ(lon, lat, 1));
+      });
+    
+      if (acc.lengthSq() === 0) {
+        return { centerLon: 0, centerLat: 0 };
+      }
+    
+      return vectorToLonLat(acc);
+    }
+    
+    const FRONT_VECTOR = new THREE.Vector3(0, 0, 1);
+    
+    function getTargetQuaternionForFeature(feature) {
       const { centerLon, centerLat } = getCenterOfFeature(feature);
     
-      // 현재 lonLatToXYZ 좌표계에 맞춘 경험적 부호
-      // 정면(카메라 쪽)으로 국가 중심이 오도록 globeGroup 회전값 계산
-      const targetRotY = THREE.MathUtils.degToRad(-centerLon - 90);
-      const targetRotX = THREE.MathUtils.degToRad(-centerLat);
+      // 현재 국가 중심의 3D 벡터
+      const countryVec = lonLatToXYZ(centerLon, centerLat, 1).normalize();
     
-      return { x: targetRotX, y: targetRotY };
+      // 그 벡터가 카메라 정면(+Z)으로 오도록 지구를 회전
+      const q = new THREE.Quaternion().setFromUnitVectors(countryVec, FRONT_VECTOR);
+      return q;
     }
     
     function rotateGlobeToFeature(feature, duration = 1200) {
       if (!globeGroup || !feature) return;
     
-      const targetRot = getGlobeRotationForFeature(feature);
+      const targetQ = getTargetQuaternionForFeature(feature);
     
       if (duration <= 0) {
-        globeGroup.rotation.x = targetRot.x;
-        globeGroup.rotation.y = targetRot.y;
+        globeGroup.quaternion.copy(targetQ);
+        isMoving = false;
         return;
       }
     
       isMoving = true;
     
-      new TWEEN.Tween(globeGroup.rotation)
-        .to({ x: targetRot.x, y: targetRot.y }, duration)
+      const startQ = globeGroup.quaternion.clone();
+      const tweenObj = { t: 0 };
+    
+      new TWEEN.Tween(tweenObj)
+        .to({ t: 1 }, duration)
         .easing(TWEEN.Easing.Quadratic.Out)
+        .onUpdate(() => {
+          globeGroup.quaternion.slerpQuaternions(startQ, targetQ, tweenObj.t);
+        })
         .onComplete(() => {
+          globeGroup.quaternion.copy(targetQ);
           isMoving = false;
         })
         .start();
@@ -279,8 +330,9 @@
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
-      controls.rotateSpeed = 0.3;
       controls.enablePan = false;
+      controls.enableRotate = false;
+      controls.enableZoom = true;
       controls.target.set(0, 0, 0);
     
       globeGroup = new THREE.Group();
@@ -340,7 +392,7 @@
       const params = new URLSearchParams(location.search);
       const from = params.get('from');
       const to = params.get('to');
-    
+      
       if (from && to) {
         const fromFeature = geoJSON.features.find(
           f => f.properties.ISO_A2.toLowerCase() === from.toLowerCase()
@@ -348,15 +400,19 @@
         const toFeature = geoJSON.features.find(
           f => f.properties.ISO_A2.toLowerCase() === to.toLowerCase()
         );
-    
+      
         if (fromFeature && toFeature) {
           displayCountry(fromFeature, { immediate: true });
           setTimeout(() => {
             displayCountry(toFeature);
           }, 700);
+        } else {
+          displayCountry(korF, { immediate: true });
         }
+      } else {
+        displayCountry(korF, { immediate: true });
       }
-    
+      
       animate();
       
       window.addEventListener('resize', () => {
