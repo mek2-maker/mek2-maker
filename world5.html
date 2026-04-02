@@ -406,8 +406,8 @@
       const code = (feature.properties.ISO_A2 || '').toLowerCase();
     
       let stepDeg = 1.0;
-      if (code === 'cn' || code === 'us' || code === 'in') stepDeg = 0.5;
-      if (code === 'ru' || code === 'ca') stepDeg = 0.8;
+      if (code === 'cn' || code === 'us' || code === 'in') stepDeg = 0.1;
+      if (code === 'ru' || code === 'ca') stepDeg = 0.1;
     
       polys.forEach(poly => {
         const mesh = buildGridFillMeshForPolygon(poly, color, stepDeg);
