@@ -329,7 +329,7 @@
       return true;
     }
     
-    function buildGridFillMeshForPolygon(poly, color, stepDeg = 1.0) {
+    function buildGridFillMeshForPolygon(poly, color, stepDeg = 0.5) {
       if (!poly || !poly.length || !poly[0] || poly[0].length < 3) return null;
     
       const { centerLon, centerLat } = getPolygonApproxCenter(poly);
