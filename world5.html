@@ -1,4 +1,4 @@
-<!-- 생략된 부분 없이 완전한 코드입니다. 여기서부터 복사하세요 -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -223,12 +223,110 @@
       return { centerLon: (minLon + maxLon) / 2, centerLat: (minLat + maxLat) / 2 };
     }
     
+    function getPolygonApproxCenter(poly) {
+      const outer = poly[0];
+      if (!outer || !outer.length) return { centerLon: 0, centerLat: 0 };
+    
+      let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+      outer.forEach(([lon, lat]) => {
+        minLon = Math.min(minLon, lon);
+        maxLon = Math.max(maxLon, lon);
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+      });
+    
+      return {
+        centerLon: (minLon + maxLon) / 2,
+        centerLat: (minLat + maxLat) / 2
+      };
+    }
+    
+    function getLocalBasis(centerLon, centerLat) {
+      const center = lonLatToXYZ(centerLon, centerLat, 1).normalize();
+    
+      const worldUp = new THREE.Vector3(0, 1, 0);
+      let east = new THREE.Vector3().crossVectors(worldUp, center);
+    
+      // 극지방 근처 안전장치
+      if (east.lengthSq() < 1e-10) {
+        east = new THREE.Vector3(1, 0, 0).cross(center);
+      }
+      east.normalize();
+    
+      const north = new THREE.Vector3().crossVectors(center, east).normalize();
+    
+      return { center, east, north };
+    }
+    
+    function projectLonLatToLocal2D(lon, lat, basis, scale = 1.0) {
+      const p = lonLatToXYZ(lon, lat, 1);
+      return [
+        p.dot(basis.east) * scale,
+        p.dot(basis.north) * scale
+      ];
+    }
+    
+    function buildFillMeshForPolygon(poly, color) {
+      if (!poly || !poly.length || !poly[0] || poly[0].length < 3) return null;
+    
+      const { centerLon, centerLat } = getPolygonApproxCenter(poly);
+      const basis = getLocalBasis(centerLon, centerLat);
+    
+      const rings2D = poly.map(ring =>
+        ring.map(([lon, lat]) => projectLonLatToLocal2D(lon, lat, basis, 1.0))
+      );
+    
+      const verts2D = [];
+      const holes = [];
+    
+      rings2D.forEach((ring, i) => {
+        if (!ring || ring.length < 3) return;
+        if (i > 0) holes.push(verts2D.length / 2);
+        ring.forEach(([x, y]) => verts2D.push(x, y));
+      });
+    
+      if (verts2D.length < 6) return null;
+    
+      const idxs = earcut(verts2D, holes, 2);
+      if (!idxs || !idxs.length) return null;
+    
+      const pos = [];
+      idxs.forEach(i => {
+        const x = verts2D[2 * i];
+        const y = verts2D[2 * i + 1];
+    
+        const v = basis.center.clone()
+          .addScaledVector(basis.east, x)
+          .addScaledVector(basis.north, y)
+          .normalize()
+          .multiplyScalar(FILL_R);
+    
+        pos.push(v.x, v.y, v.z);
+      });
+    
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geom.computeVertexNormals();
+    
+      return new THREE.Mesh(
+        geom,
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.38,
+          side: THREE.DoubleSide,
+          depthTest: false,
+          depthWrite: false
+        })
+      );
+    }
+    
     function shouldUseSafeFill(feature) {
       const code = (feature.properties.ISO_A2 || '').toLowerCase();
     
-      // 우선 큰 나라/복잡한 멀티폴리곤 국가는 선택 fill 비활성화
+      // 우선 정말 까다로운 몇 나라만 제한
       const blocked = new Set([
-        'cn', 'ru', 'us', 'ca', 'br', 'id', 'au', 'in'
+        'cn', 'ru'
       ]);
     
       if (blocked.has(code)) return false;
@@ -237,8 +335,8 @@
         ? [feature.geometry.coordinates]
         : feature.geometry.coordinates;
     
-      // 멀티폴리곤이 너무 많으면 fill 불안정 가능성 높음
-      if (polys.length > 12) return false;
+      // 너무 많은 조각은 아직 보수적으로 제한
+      if (polys.length > 120) return false;
     
       return true;
     }
@@ -259,48 +357,13 @@
 
     function drawFill(feature, color) {
       const grp = new THREE.Group();
-      const { centerLon, centerLat } = getCenterOfFeature(feature);
       const polys = feature.geometry.type === 'Polygon'
         ? [feature.geometry.coordinates]
         : feature.geometry.coordinates;
     
       polys.forEach(poly => {
-        const rings2D = poly.map(ring =>
-          ring.map(([lon, lat]) => [
-            (lon - centerLon) * Math.PI / 180,
-            (lat - centerLat) * Math.PI / 180
-          ])
-        );
-    
-        const verts2D = [], holes = [];
-        rings2D.forEach((r, i) => {
-          if (i > 0) holes.push(verts2D.length / 2);
-          r.forEach(p => verts2D.push(...p));
-        });
-    
-        if (verts2D.length < 6) return;
-    
-        const idxs = earcut(verts2D, holes, 2), pos = [];
-        idxs.forEach(i => {
-          const x = verts2D[2 * i], y = verts2D[2 * i + 1];
-          const lon = centerLon + x * 180 / Math.PI, lat = centerLat + y * 180 / Math.PI;
-          const v = lonLatToXYZ(lon, lat, FILL_R);
-          pos.push(v.x, v.y, v.z);
-        });
-    
-        const geom = new THREE.BufferGeometry();
-        geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        grp.add(new THREE.Mesh(
-          geom,
-          new THREE.MeshBasicMaterial({
-            color,
-            transparent: true,
-            opacity: 0.5,
-            side: THREE.FrontSide,
-            depthTest: false,
-            depthWrite: false
-          })
-        ));
+        const mesh = buildFillMeshForPolygon(poly, color);
+        if (mesh) grp.add(mesh);
       });
     
       return grp;
@@ -359,6 +422,9 @@
         if (shouldUseSafeFill(feature)) {
           activeFill = drawFill(feature, 0xff0000);
           scene.add(activeFill);
+          console.log('[FILL] enabled for', feature.properties.ADMIN);
+        } else {
+          console.log('[FILL] skipped for', feature.properties.ADMIN);
         }
       }
     
