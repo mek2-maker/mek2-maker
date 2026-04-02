@@ -271,43 +271,61 @@
         p.dot(basis.north) * scale
       ];
     }
-
-    function subdivideTriangle(a, b, c, maxLen, out) {
-      const ab = a.clone().add(b).normalize();
-      const bc = b.clone().add(c).normalize();
-      const ca = c.clone().add(a).normalize();
     
-      const dab = a.distanceTo(b);
-      const dbc = b.distanceTo(c);
-      const dca = c.distanceTo(a);
+    function unwrapRingLongitudes(ring, refLon) {
+      const out = [];
+      let prev = null;
     
-      if (dab > maxLen || dbc > maxLen || dca > maxLen) {
-        subdivideTriangle(a, ab, ca, maxLen, out);
-        subdivideTriangle(ab, b, bc, maxLen, out);
-        subdivideTriangle(ca, bc, c, maxLen, out);
-        subdivideTriangle(ab, bc, ca, maxLen, out);
-      } else {
-        out.push(a.clone(), b.clone(), c.clone());
-      }
+      ring.forEach(([lon, lat], idx) => {
+        let x = lon;
+    
+        if (idx === 0) {
+          while (x - refLon > 180) x -= 360;
+          while (x - refLon < -180) x += 360;
+        } else {
+          while (x - prev > 180) x -= 360;
+          while (x - prev < -180) x += 360;
+        }
+    
+        out.push([x, lat]);
+        prev = x;
+      });
+    
+      return out;
     }
     
     function buildFillMeshForPolygon(poly, color) {
       if (!poly || !poly.length || !poly[0] || poly[0].length < 3) return null;
     
       const { centerLon, centerLat } = getPolygonApproxCenter(poly);
-      const basis = getLocalBasis(centerLon, centerLat);
     
-      const rings2D = poly.map(ring =>
-        ring.map(([lon, lat]) => projectLonLatToLocal2D(lon, lat, basis, 1.0))
-      );
+      const cosLat = Math.cos(THREE.MathUtils.degToRad(centerLat)) || 1e-6;
+    
+      // 1) polygon별로만 2D 투영
+      // 2) 날짜변경선 근처 왜곡 줄이려고 longitude unwrap
+      const rings2D = poly.map(ring => {
+        const unwrapped = unwrapRingLongitudes(ring, centerLon);
+        return unwrapped.map(([lon, lat]) => {
+          const x = (lon - centerLon) * cosLat;
+          const y = (lat - centerLat);
+          return [x, y];
+        });
+      });
     
       const verts2D = [];
       const holes = [];
+      const vertexLonLat = [];
     
-      rings2D.forEach((ring, i) => {
-        if (!ring || ring.length < 3) return;
+      rings2D.forEach((ring2D, i) => {
+        const ringRaw = unwrapRingLongitudes(poly[i], centerLon);
+    
+        if (!ring2D || ring2D.length < 3) return;
         if (i > 0) holes.push(verts2D.length / 2);
-        ring.forEach(([x, y]) => verts2D.push(x, y));
+    
+        for (let k = 0; k < ring2D.length; k++) {
+          verts2D.push(ring2D[k][0], ring2D[k][1]);
+          vertexLonLat.push(ringRaw[k]);
+        }
       });
     
       if (verts2D.length < 6) return null;
@@ -315,29 +333,13 @@
       const idxs = earcut(verts2D, holes, 2);
       if (!idxs || !idxs.length) return null;
     
-      const triangles = [];
-      const maxLen = 0.12; // 값 작을수록 더 촘촘 (0.08~0.15 추천)
-      
-      for (let i = 0; i < idxs.length; i += 3) {
-        const ids = [idxs[i], idxs[i + 1], idxs[i + 2]];
-      
-        const verts3D = ids.map(id => {
-          const x = verts2D[2 * id];
-          const y = verts2D[2 * id + 1];
-      
-          return basis.center.clone()
-            .addScaledVector(basis.east, x)
-            .addScaledVector(basis.north, y)
-            .normalize();
-        });
-      
-        subdivideTriangle(verts3D[0], verts3D[1], verts3D[2], maxLen, triangles);
-      }
-      
+      // earcut이 선택한 "원래 꼭짓점"만 그대로 3D로 복원
+      // => boundary와 fill이 같은 원본 점을 공유하므로 더 잘 맞음
       const pos = [];
-      triangles.forEach(v => {
-        const p = v.clone().multiplyScalar(FILL_R);
-        pos.push(p.x, p.y, p.z);
+      idxs.forEach(id => {
+        const [lon, lat] = vertexLonLat[id];
+        const v = lonLatToXYZ(lon, lat, FILL_R);
+        pos.push(v.x, v.y, v.z);
       });
     
       const geom = new THREE.BufferGeometry();
@@ -349,7 +351,7 @@
         new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: 0.38,
+          opacity: 0.34,
           side: THREE.DoubleSide,
           depthTest: true,
           depthWrite: false,
