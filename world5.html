@@ -104,7 +104,13 @@
     let scene, camera, renderer, controls;
     let geoJSON, infoData;
     let globeGroup, globeMesh;
-    let curLine = null, curFill = null;
+    
+    let baseKRLine = null;
+    let baseKRFill = null;
+    
+    let activeLine = null;
+    let activeFill = null;
+    
     let currentFeature = null;
     let isMoving = false;
     
@@ -186,15 +192,13 @@
       return vectorToLonLat(acc);
     }
     
-    const FRONT_VECTOR = new THREE.Vector3(0, 0, 1);
+    const FRONT_VECTOR = new THREE.Vector3(0, 0, -1);
     
     function getTargetQuaternionForFeature(feature) {
       const { centerLon, centerLat } = getCenterOfFeature(feature);
     
-      // 현재 국가 중심의 3D 벡터
       const countryVec = lonLatToXYZ(centerLon, centerLat, 1).normalize();
     
-      // 그 벡터가 카메라 정면(+Z)으로 오도록 지구를 회전
       const q = new THREE.Quaternion().setFromUnitVectors(countryVec, FRONT_VECTOR);
       return q;
     }
@@ -248,25 +252,62 @@
       const polys = feature.geometry.type === 'Polygon'
         ? [feature.geometry.coordinates]
         : feature.geometry.coordinates;
+    
       polys.forEach(poly => {
-        const rings2D = poly.map(ring => ring.map(([lon, lat]) => [ (lon - centerLon) * Math.PI / 180, (lat - centerLat) * Math.PI / 180 ]));
+        const rings2D = poly.map(ring =>
+          ring.map(([lon, lat]) => [
+            (lon - centerLon) * Math.PI / 180,
+            (lat - centerLat) * Math.PI / 180
+          ])
+        );
+    
         const verts2D = [], holes = [];
-        rings2D.forEach((r, i) => { if (i > 0) holes.push(verts2D.length / 2); r.forEach(p => verts2D.push(...p)); });
+        rings2D.forEach((r, i) => {
+          if (i > 0) holes.push(verts2D.length / 2);
+          r.forEach(p => verts2D.push(...p));
+        });
+    
         if (verts2D.length < 6) return;
-        const idxs = earcut(verts2D, holes, 2), pos = [];
+    
+        const idxs = earcut(verts2D, holes, 2);
+        const pos = [];
+    
         idxs.forEach(i => {
           const x = verts2D[2 * i], y = verts2D[2 * i + 1];
-          const lon = centerLon + x * 180 / Math.PI, lat = centerLat + y * 180 / Math.PI;
+          const lon = centerLon + x * 180 / Math.PI;
+          const lat = centerLat + y * 180 / Math.PI;
           const v = lonLatToXYZ(lon, lat, FILL_R);
           pos.push(v.x, v.y, v.z);
         });
+    
         const geom = new THREE.BufferGeometry();
         geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        grp.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.FrontSide, depthTest: false, depthWrite: false })));
+        grp.add(new THREE.Mesh(
+          geom,
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.35,
+            side: THREE.DoubleSide,
+            depthTest: false,
+            depthWrite: false
+          })
+        ));
       });
+    
       return grp;
     }
-
+    
+    function setBaseKorea(feature) {
+      if (baseKRLine) globeGroup.remove(baseKRLine);
+      if (baseKRFill) globeGroup.remove(baseKRFill);
+    
+      baseKRLine = drawBoundary(feature, 0x0000ff);
+      baseKRFill = drawFill(feature, 0x0000ff);
+    
+      globeGroup.add(baseKRLine, baseKRFill);
+    }
+    
     function updateLeftPanel() {
       const el = document.getElementById('left-content');
       el.innerHTML = '';
@@ -289,33 +330,45 @@
 
 
     function displayCountry(feature, options = {}) {
-    const { immediate = false } = options;
-  
-    if (!feature) {
-      showMessage('Country not found', 'error');
-      return;
+      const { immediate = false } = options;
+    
+      if (!feature) {
+        showMessage('Country not found', 'error');
+        return;
+      }
+    
+      showMessage(`${feature.properties.ADMIN} selected`, 'success');
+    
+      const iso = feature.properties.ISO_A2.toLowerCase();
+      const isKR = iso === 'kr';
+    
+      if (activeLine) globeGroup.remove(activeLine);
+      if (activeFill) globeGroup.remove(activeFill);
+      activeLine = null;
+      activeFill = null;
+    
+      // 한국은 base layer로 항상 유지
+      // 한국 이외 국가만 active layer로 빨간색 표시
+      if (!isKR) {
+        activeLine = drawBoundary(feature, 0xff0000);
+    
+        // 큰 국가 왜곡 안정화 전까지는 fill을 제한적으로 사용
+        // 우선 경계선 위주로 두고, 필요하면 아래 줄 주석 해제
+        // activeFill = drawFill(feature, 0xff0000);
+    
+        globeGroup.add(activeLine);
+        if (activeFill) globeGroup.add(activeFill);
+      }
+    
+      window.currentFeature = feature;
+      currentFeature = feature;
+    
+      updateLeftPanel();
+      updateRightPanel(feature);
+      updateTimeLabels();
+    
+      rotateGlobeToFeature(feature, immediate ? 0 : 1200);
     }
-  
-    showMessage(`${feature.properties.ADMIN} selected`, 'success');
-  
-    if (curLine) globeGroup.remove(curLine);
-    if (curFill) globeGroup.remove(curFill);
-  
-    const isKR = feature.properties.ISO_A2.toLowerCase() === 'kr';
-    curLine = drawBoundary(feature, isKR ? 0x0000ff : 0xff0000);
-    curFill = drawFill(feature, isKR ? 0x0000ff : 0xff0000);
-  
-    globeGroup.add(curLine, curFill);
-  
-    window.currentFeature = feature;
-    currentFeature = feature;
-  
-    updateLeftPanel();
-    updateRightPanel(feature);
-    updateTimeLabels();
-  
-    rotateGlobeToFeature(feature, immediate ? 0 : 1200);
-  }
 
     async function init() {
       scene = new THREE.Scene();
@@ -355,14 +408,16 @@
       geoJSON = await fetch('countries.geojson').then(r => r.json());
 
       const korF = geoJSON.features.find(f => f.properties.ADMIN.toLowerCase().includes('korea'));
-    
+      
+      setBaseKorea(korF);
+      
       const dl = document.getElementById('country-names');
       geoJSON.features.forEach(f => {
         const opt = document.createElement('option');
         opt.value = f.properties.ADMIN;
         dl.appendChild(opt);
       });
-
+      
       document.getElementById('searchBtn').onclick = () => {
         if (isMoving) {
           showMessage('Still moving. Please wait a moment.', 'error');
