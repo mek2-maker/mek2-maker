@@ -187,7 +187,7 @@
     let activeLine = null;
     let activeFill = null;
     
-    const R = 1, FILL_R = R + 0.0001, LINE_R = R + 0.0002;
+    const R = 1, FILL_R = R + 0.00035, LINE_R = R + 0.00055;
     const msgDiv = document.getElementById('message');
 
     function showMessage(msg, type='error') {
@@ -223,22 +223,28 @@
       return { centerLon: (minLon + maxLon) / 2, centerLat: (minLat + maxLat) / 2 };
     }
     
+    function vectorToLonLat(v) {
+      const nv = v.clone().normalize();
+      const lat = THREE.MathUtils.radToDeg(Math.asin(nv.y));
+      const lon = THREE.MathUtils.radToDeg(Math.atan2(-nv.z, nv.x));
+      return { centerLon: lon, centerLat: lat };
+    }
+    
     function getPolygonApproxCenter(poly) {
       const outer = poly[0];
       if (!outer || !outer.length) return { centerLon: 0, centerLat: 0 };
     
-      let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+      const acc = new THREE.Vector3(0, 0, 0);
+    
       outer.forEach(([lon, lat]) => {
-        minLon = Math.min(minLon, lon);
-        maxLon = Math.max(maxLon, lon);
-        minLat = Math.min(minLat, lat);
-        maxLat = Math.max(maxLat, lat);
+        acc.add(lonLatToXYZ(lon, lat, 1));
       });
     
-      return {
-        centerLon: (minLon + maxLon) / 2,
-        centerLat: (minLat + maxLat) / 2
-      };
+      if (acc.lengthSq() < 1e-12) {
+        return { centerLon: 0, centerLat: 0 };
+      }
+    
+      return vectorToLonLat(acc);
     }
     
     function getLocalBasis(centerLon, centerLat) {
@@ -345,8 +351,11 @@
           transparent: true,
           opacity: 0.38,
           side: THREE.DoubleSide,
-          depthTest: false,
-          depthWrite: false
+          depthTest: true,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1
         })
       );
     }
@@ -404,6 +413,12 @@
     
       baseKRLine = drawBoundary(feature, 0x0000ff);
       baseKRFill = drawFill(feature, 0x0000ff);
+    
+      baseKRFill.traverse(obj => {
+        if (obj.isMesh && obj.material) {
+          obj.material.opacity = 0.28;
+        }
+      });
     
       scene.add(baseKRLine, baseKRFill);
     }
