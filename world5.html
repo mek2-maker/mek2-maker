@@ -188,6 +188,9 @@
     let activeFill = null;
     
     const R = 1, FILL_R = R + 0.00035, LINE_R = R + 0.00055;
+    const LARGE_FILL_CODES = new Set([
+      'cn', 'ru', 'us', 'ca', 'br', 'au', 'in', 'id'
+    ]);
     const msgDiv = document.getElementById('message');
 
     function showMessage(msg, type='error') {
@@ -294,6 +297,126 @@
       return out;
     }
 
+    function wrapLon(lon) {
+      let x = lon;
+      while (x > 180) x -= 360;
+      while (x < -180) x += 360;
+      return x;
+    }
+    
+    function pointInRing2D(x, y, ring) {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+    
+        const intersect =
+          ((yi > y) !== (yj > y)) &&
+          (x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-12) + xi);
+    
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+    
+    function pointInPolygonWithHoles(x, y, rings) {
+      if (!rings || !rings.length) return false;
+      if (!pointInRing2D(x, y, rings[0])) return false;
+    
+      for (let i = 1; i < rings.length; i++) {
+        if (pointInRing2D(x, y, rings[i])) return false;
+      }
+      return true;
+    }
+    
+    function buildGridFillMeshForPolygon(poly, color, stepDeg = 1.0) {
+      if (!poly || !poly.length || !poly[0] || poly[0].length < 3) return null;
+    
+      const { centerLon, centerLat } = getPolygonApproxCenter(poly);
+      const rings = poly.map(ring => unwrapRingLongitudes(ring, centerLon));
+    
+      let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      rings.forEach(ring => {
+        ring.forEach(([lon, lat]) => {
+          minLon = Math.min(minLon, lon);
+          maxLon = Math.max(maxLon, lon);
+          minLat = Math.min(minLat, lat);
+          maxLat = Math.max(maxLat, lat);
+        });
+      });
+    
+      if (!isFinite(minLon) || !isFinite(maxLon) || !isFinite(minLat) || !isFinite(maxLat)) {
+        return null;
+      }
+    
+      const pos = [];
+    
+      for (let lat = minLat; lat < maxLat; lat += stepDeg) {
+        for (let lon = minLon; lon < maxLon; lon += stepDeg) {
+          const cx = lon + stepDeg * 0.5;
+          const cy = lat + stepDeg * 0.5;
+    
+          if (!pointInPolygonWithHoles(cx, cy, rings)) continue;
+    
+          const p1 = lonLatToXYZ(wrapLon(lon),               lat,               FILL_R);
+          const p2 = lonLatToXYZ(wrapLon(lon + stepDeg),     lat,               FILL_R);
+          const p3 = lonLatToXYZ(wrapLon(lon + stepDeg),     lat + stepDeg,     FILL_R);
+          const p4 = lonLatToXYZ(wrapLon(lon),               lat + stepDeg,     FILL_R);
+    
+          // triangle 1
+          pos.push(p1.x, p1.y, p1.z);
+          pos.push(p2.x, p2.y, p2.z);
+          pos.push(p3.x, p3.y, p3.z);
+    
+          // triangle 2
+          pos.push(p1.x, p1.y, p1.z);
+          pos.push(p3.x, p3.y, p3.z);
+          pos.push(p4.x, p4.y, p4.z);
+        }
+      }
+    
+      if (!pos.length) return null;
+    
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geom.computeVertexNormals();
+    
+      return new THREE.Mesh(
+        geom,
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.34,
+          side: THREE.DoubleSide,
+          depthTest: true,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1
+        })
+      );
+    }
+    
+    function buildGridFillMesh(feature, color) {
+      const grp = new THREE.Group();
+      const polys = feature.geometry.type === 'Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+    
+      const code = (feature.properties.ISO_A2 || '').toLowerCase();
+    
+      let stepDeg = 1.0;
+      if (code === 'cn' || code === 'us' || code === 'in') stepDeg = 0.8;
+      if (code === 'ru' || code === 'ca') stepDeg = 1.2;
+    
+      polys.forEach(poly => {
+        const mesh = buildGridFillMeshForPolygon(poly, color, stepDeg);
+        if (mesh) grp.add(mesh);
+      });
+    
+      return grp;
+    }
+    
     function buildFillMeshForPolygon(poly, color) {
       if (!poly || !poly.length || !poly[0] || poly[0].length < 3) return null;
     
@@ -355,9 +478,7 @@
     function shouldUseSafeFill(feature) {
       const code = (feature.properties.ISO_A2 || '').toLowerCase();
     
-      // 우선 정말 까다로운 몇 나라만 제한
       const blocked = new Set([
-        'cn', 'ru', 'us', 'ca', 'br', 'au', 'in', 'id'
       ]);
     
       if (blocked.has(code)) return false;
@@ -366,8 +487,7 @@
         ? [feature.geometry.coordinates]
         : feature.geometry.coordinates;
     
-      // 너무 많은 조각은 아직 보수적으로 제한
-      if (polys.length > 120) return false;
+      if (polys.length > 1200) return false;
     
       return true;
     }
@@ -387,6 +507,14 @@
     }
 
     function drawFill(feature, color) {
+      const code = (feature.properties.ISO_A2 || '').toLowerCase();
+    
+      // 큰 국가는 grid 기반 fill
+      if (LARGE_FILL_CODES.has(code)) {
+        return buildGridFillMesh(feature, color);
+      }
+    
+      // 나머지는 기존 earcut 기반 fill
       const grp = new THREE.Group();
       const polys = feature.geometry.type === 'Polygon'
         ? [feature.geometry.coordinates]
